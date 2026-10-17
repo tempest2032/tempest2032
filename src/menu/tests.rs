@@ -850,16 +850,15 @@ fn menus_stop_rendering_the_game_underneath() {
         .world_mut()
         .spawn((Camera::default(), crate::camera::WebCamera))
         .id();
-    let effects = app.world_mut().spawn((Camera::default(), Camera2d)).id();
     let overlay = app.world_mut().spawn(Camera::default()).id();
     app.update();
     let active = |app: &App, entity| app.world().get::<Camera>(entity).unwrap().is_active;
-    assert!(!active(&app, web) && !active(&app, effects));
+    assert!(!active(&app, web));
     assert!(
         active(&app, overlay),
         "the UI camera keeps rendering the menus"
     );
     app.world_mut().resource_mut::<FrontEnd>().screen = Screen::Gameplay;
     app.update();
-    assert!(active(&app, web) && active(&app, effects));
+    assert!(active(&app, web));
 }

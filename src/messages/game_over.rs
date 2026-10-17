@@ -1,12 +1,7 @@
 //! gofeed's full-color bitmap, sine pulse, and fading scale-and-rotate feedback.
 
 use super::Messages;
-use bevy::{
-    asset::RenderAssetUsages,
-    camera::visibility::RenderLayers,
-    prelude::*,
-    render::render_resource::{Extent3d, TextureDimension, TextureFormat},
-};
+use bevy::{camera::visibility::RenderLayers, prelude::*};
 
 const WIDTH: usize = 384;
 const HEIGHT: usize = 240;
@@ -91,7 +86,7 @@ enum Canvas {
 }
 
 #[derive(Resource)]
-struct ImageHandle(Handle<Image>);
+struct ImageHandle(Handle<Image>, Handle<StandardMaterial>);
 
 pub(super) fn add_systems(app: &mut App) {
     app.init_resource::<Feedback>()
@@ -100,39 +95,41 @@ pub(super) fn add_systems(app: &mut App) {
         .add_systems(Update, draw.after(super::render::draw));
 }
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
-    let mut image = Image::new_fill(
-        Extent3d {
-            width: WIDTH as u32,
-            height: HEIGHT as u32,
-            depth_or_array_layers: 1,
-        },
-        TextureDimension::D2,
-        &[0, 0, 0, 255],
-        TextureFormat::Rgba8UnormSrgb,
-        RenderAssetUsages::default(),
-    );
-    image.sampler = bevy::image::ImageSampler::nearest();
-    let image = images.add(image);
-    commands.spawn((
-        Canvas::Background,
-        Sprite {
-            color: Color::BLACK,
-            custom_size: Some(Vec2::new(WIDTH as f32, HEIGHT as f32)),
-            ..default()
-        },
-        Transform::default(),
-        Visibility::Hidden,
-        RenderLayers::layer(2),
-    ));
-    commands.spawn((
-        Canvas::Feedback,
-        Sprite::from_image(image.clone()),
-        Transform::from_xyz(0., 0., 1.),
-        Visibility::Hidden,
-        RenderLayers::layer(2),
-    ));
-    commands.insert_resource(ImageHandle(image));
+fn setup(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    let image = images.add(crate::cry::feedback_image());
+    let quad = meshes.add(Rectangle::new(1., 1.));
+    let material = materials.add(StandardMaterial {
+        base_color_texture: Some(image.clone()),
+        unlit: true,
+        ..default()
+    });
+    for (canvas, material, depth) in [
+        (
+            Canvas::Background,
+            materials.add(StandardMaterial {
+                base_color: Color::BLACK,
+                unlit: true,
+                ..default()
+            }),
+            0.,
+        ),
+        (Canvas::Feedback, material.clone(), 1.),
+    ] {
+        commands.spawn((
+            canvas,
+            Mesh3d(quad.clone()),
+            MeshMaterial3d(material),
+            Transform::from_xyz(0., 0., crate::cry::BEHIND_HUD + depth),
+            Visibility::Hidden,
+            RenderLayers::layer(3),
+        ));
+    }
+    commands.insert_resource(ImageHandle(image, material));
 }
 
 fn advance(messages: Res<Messages>, mut feedback: ResMut<Feedback>) {
@@ -149,36 +146,29 @@ fn advance(messages: Res<Messages>, mut feedback: ResMut<Feedback>) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn draw(
     messages: Res<Messages>,
     feedback: Res<Feedback>,
     handle: Res<ImageHandle>,
     mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    mut canvases: Query<(&Canvas, &mut Sprite, &mut Transform, &mut Visibility)>,
+    mut canvases: Query<(&Canvas, &mut Transform, &mut Visibility)>,
     mut preview: Local<crate::cry::FeedbackPreview>,
 ) {
     let age = messages.game_over.map(|active| active.age);
     let viewport = crate::messages::geometry::viewport_width(&windows);
-    for (canvas, mut sprite, mut transform, mut visible) in &mut canvases {
+    let scales = crate::cry::feedback_scales(viewport);
+    for (canvas, mut transform, mut visible) in &mut canvases {
         visible.set_if_neq(if age.is_some() {
             Visibility::Visible
         } else {
             Visibility::Hidden
         });
-        match canvas {
-            Canvas::Background => {
-                let size = Some(Vec2::new(viewport, 240.));
-                if sprite.custom_size != size {
-                    sprite.custom_size = size;
-                }
-            }
-            Canvas::Feedback => {
-                let scale = Vec3::splat((viewport / WIDTH as f32).min(1.));
-                if transform.scale != scale {
-                    transform.scale = scale;
-                }
-            }
+        let scale = scales[usize::from(matches!(canvas, Canvas::Feedback))];
+        if transform.scale != scale {
+            transform.scale = scale;
         }
     }
     let Some(age) = age else { return };
@@ -198,6 +188,8 @@ fn draw(
             })
         };
         crate::cry::write_feedback(image, &feedback.pixels, next, phase);
+        // Updating the texture replaces its GPU view; refresh the material binding too.
+        let _ = materials.get_mut(&handle.1);
     }
 }
 
@@ -211,6 +203,8 @@ mod tests {
         app.init_resource::<Messages>()
             .init_resource::<Feedback>()
             .init_resource::<Assets<Image>>()
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
             .add_systems(Startup, setup)
             .add_systems(FixedUpdate, advance)
             .add_systems(Update, draw);
@@ -245,6 +239,8 @@ mod tests {
         app.init_resource::<Messages>()
             .init_resource::<Feedback>()
             .init_resource::<Assets<Image>>()
+            .init_resource::<Assets<Mesh>>()
+            .init_resource::<Assets<StandardMaterial>>()
             .add_systems(Startup, setup)
             .add_systems(Update, (advance, draw).chain());
         let mut previous = Vec::new();

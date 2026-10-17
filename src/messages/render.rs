@@ -3,12 +3,7 @@ use super::{
     font::{Font, GlyphTriangle},
 };
 use bevy::{
-    asset::RenderAssetUsages,
-    camera::{ScalingMode, visibility::RenderLayers},
-    core_pipeline::tonemapping::Tonemapping,
-    mesh::PrimitiveTopology,
-    prelude::*,
-    sprite_render::AlphaMode2d,
+    asset::RenderAssetUsages, camera::visibility::RenderLayers, mesh::PrimitiveTopology, prelude::*,
 };
 use std::collections::HashMap;
 
@@ -24,34 +19,21 @@ pub(super) struct Assets {
 pub(super) fn setup(
     mut commands: Commands,
     mut meshes: ResMut<bevy::asset::Assets<Mesh>>,
-    mut materials: ResMut<bevy::asset::Assets<ColorMaterial>>,
+    mut materials: ResMut<bevy::asset::Assets<StandardMaterial>>,
 ) {
-    commands.spawn((
-        Camera2d,
-        Camera {
-            order: 2,
-            clear_color: ClearColorConfig::None,
-            ..default()
-        },
-        Projection::Orthographic(OrthographicProjection {
-            scaling_mode: ScalingMode::FixedVertical {
-                viewport_height: 240.,
-            },
-            ..OrthographicProjection::default_2d()
-        }),
-        RenderLayers::layer(2),
-        Tonemapping::None,
-        Msaa::Sample4,
-    ));
     let mesh = meshes.add(message_mesh(Vec::new()));
+    // The overlay camera shares the former 2D layer's 240-line orthographic view.
     commands.spawn((
         Graphic,
-        Mesh2d(mesh.clone()),
-        MeshMaterial2d(materials.add(ColorMaterial {
-            alpha_mode: AlphaMode2d::Blend,
+        Mesh3d(mesh.clone()),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            unlit: true,
+            cull_mode: None,
+            alpha_mode: AlphaMode::Blend,
             ..default()
         })),
-        RenderLayers::layer(2),
+        Transform::from_xyz(0., 0., crate::cry::BEHIND_HUD),
+        RenderLayers::layer(3),
         bevy::camera::visibility::NoFrustumCulling,
     ));
     commands.insert_resource(Assets {

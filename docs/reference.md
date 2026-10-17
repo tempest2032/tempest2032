@@ -1430,8 +1430,10 @@ and starts a fresh game.
 
 ## Antialiasing
 
-All geometry cameras, including both gameplay layers, the 2D effects layer,
-the 3D HUD, and the welcome-screen models, use explicit 4× MSAA. A single
+All geometry cameras, including both gameplay layers, the 3D overlay, and the
+welcome-screen models, use explicit 4× MSAA. The overlay also draws rewards and
+the Game Over and warp-completion bitmaps behind its HUD, so no separate 2D
+camera allocates another window-sized depth buffer. A single
 FXAA pass on the final 3D overlay camera smooths remaining high-contrast edges
 after the scene layers are combined. UI text uses Bevy's font antialiasing;
 original bitmap feedback and particle effects retain their original resolution.
@@ -1954,7 +1956,7 @@ Assets are embedded; [assets/messages/README.md](../assets/messages/README.md) d
 `tools/message_font.py` regenerates the contours from the original source tree.
 The message renderer caches glyph volumes, fragment layouts, and linear colours.
 Unchanged frames, including paused or frozen previews, reuse the existing meshes.
-The original approach effects keep their separate 2D renderer. A manual CPU benchmark is available with
+The original approach effects keep their separate renderer, drawn through the overlay camera behind the HUD. A manual CPU benchmark is available with
 `cargo test --release benchmark_recharge_rendering -- --ignored --nocapture`.
 
 ## Warp zones

@@ -29,6 +29,23 @@ pub(crate) fn feedback_image() -> Image {
     image
 }
 
+/// Overlay-camera depth for full-screen bitmaps and rewards, behind its HUD and messages.
+pub(crate) const BEHIND_HUD: f32 = -200.;
+
+/// Scales of a unit quad for the black backdrop and the feedback bitmap, which
+/// fills the 240-line height and never exceeds its original size.
+pub(crate) fn feedback_scales(viewport: f32) -> [Vec3; 2] {
+    let fit = (viewport / FEEDBACK_WIDTH as f32).min(1.);
+    [
+        Vec3::new(viewport, 240., 1.),
+        Vec3::new(
+            FEEDBACK_WIDTH as f32 * fit,
+            FEEDBACK_HEIGHT as f32 * fit,
+            1.,
+        ),
+    ]
+}
+
 /// Chooses `ofade`'s -3..4-brad angle from the scene without consuming gameplay randomness.
 pub(crate) fn ofade_angle(source: u32) -> i32 {
     ((source.wrapping_mul(0x9e3779b9) >> 16) & 7) as i32 - 3

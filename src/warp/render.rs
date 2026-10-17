@@ -374,7 +374,7 @@ pub(crate) fn setup(
     mut images: ResMut<Assets<Image>>,
 ) {
     super::failure::setup(&mut commands, &mut images);
-    super::victory::setup(&mut commands, &mut images);
+    super::victory::setup(&mut commands, &mut images, &mut meshes, &mut materials);
     let gates = [meshes.add(gate_mesh(false)), meshes.add(gate_mesh(true))];
     let icons = std::array::from_fn(|kind| meshes.add(icon_mesh(kind)));
     let material = materials.add(StandardMaterial {

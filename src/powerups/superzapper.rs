@@ -224,13 +224,18 @@ pub(crate) struct BoltAssets(Handle<Mesh>);
 pub(crate) fn setup(
     mut commands: Commands,
     mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     let mesh = meshes.add(message_mesh(Vec::new()));
     commands.spawn((
-        Mesh2d(mesh.clone()),
-        MeshMaterial2d(materials.add(ColorMaterial::default())),
-        RenderLayers::layer(2),
+        Mesh3d(mesh.clone()),
+        MeshMaterial3d(materials.add(StandardMaterial {
+            unlit: true,
+            cull_mode: None,
+            ..default()
+        })),
+        Transform::from_xyz(0., 0., crate::cry::BEHIND_HUD),
+        RenderLayers::layer(3),
         bevy::camera::visibility::NoFrustumCulling,
     ));
     commands.insert_resource(BoltAssets(mesh));

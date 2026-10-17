@@ -208,7 +208,7 @@ pub(crate) fn add_systems(app: &mut App) {
 #[allow(clippy::type_complexity)]
 fn cover_gameplay(
     front: Res<FrontEnd>,
-    mut cameras: Query<&mut Camera, Or<(With<crate::camera::WebCamera>, With<Camera2d>)>>,
+    mut cameras: Query<&mut Camera, With<crate::camera::WebCamera>>,
     mut overlay: Query<&mut bevy::camera::visibility::RenderLayers, With<IsDefaultUiCamera>>,
 ) {
     let active = front.screen == Screen::Gameplay;

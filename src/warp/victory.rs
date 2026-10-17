@@ -157,37 +157,51 @@ impl Feedback {
     }
 }
 
+/// The black backdrop (`None`) or the feedback bitmap with its image and material.
 #[derive(Component)]
-pub(crate) struct Canvas;
+pub(crate) struct Canvas(Option<(Handle<Image>, Handle<StandardMaterial>)>);
 
-pub(crate) fn setup(commands: &mut Commands, images: &mut Assets<Image>) {
+pub(crate) fn setup(
+    commands: &mut Commands,
+    images: &mut Assets<Image>,
+    meshes: &mut Assets<Mesh>,
+    materials: &mut Assets<StandardMaterial>,
+) {
     commands.insert_resource(Feedback::default());
-    commands.spawn((
-        Canvas,
-        Sprite::from_image(images.add(cry::feedback_image())),
-        Transform::from_xyz(0., 0., 2.),
-        Visibility::Hidden,
-        RenderLayers::layer(2),
-    ));
-    commands.spawn((
-        Canvas,
-        Sprite {
-            color: Color::BLACK,
-            custom_size: Some(Vec2::new(384., 240.)),
-            ..default()
-        },
-        Transform::from_xyz(0., 0., 1.),
-        Visibility::Hidden,
-        RenderLayers::layer(2),
-    ));
+    let quad = meshes.add(Rectangle::new(1., 1.));
+    let image = images.add(cry::feedback_image());
+    let material = materials.add(StandardMaterial {
+        base_color_texture: Some(image.clone()),
+        unlit: true,
+        ..default()
+    });
+    let backdrop = materials.add(StandardMaterial {
+        base_color: Color::BLACK,
+        unlit: true,
+        ..default()
+    });
+    for (canvas, material, depth) in [
+        (Canvas(Some((image, material.clone()))), material, 2.),
+        (Canvas(None), backdrop, 1.),
+    ] {
+        commands.spawn((
+            canvas,
+            Mesh3d(quad.clone()),
+            MeshMaterial3d(material),
+            Transform::from_xyz(0., 0., cry::BEHIND_HUD + depth),
+            Visibility::Hidden,
+            RenderLayers::layer(3),
+        ));
+    }
 }
 
 pub(crate) fn draw(
     game: Res<Game>,
     mut feedback: ResMut<Feedback>,
     mut images: ResMut<Assets<Image>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
     windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
-    mut canvases: Query<(&mut Sprite, &mut Transform, &mut Visibility), With<Canvas>>,
+    mut canvases: Query<(&Canvas, &mut Transform, &mut Visibility)>,
     mut preview: Local<cry::FeedbackPreview>,
 ) {
     let fresh = game.is_changed();
@@ -206,27 +220,21 @@ pub(crate) fn draw(
     } else {
         feedback.source = None;
     }
-    for (mut sprite, mut pose, mut visible) in &mut canvases {
+    let scales = cry::feedback_scales(viewport);
+    for (canvas, mut pose, mut visible) in &mut canvases {
         visible.set_if_neq(if active.is_some() {
             Visibility::Visible
         } else {
             Visibility::Hidden
         });
-        if sprite.custom_size.is_some() {
-            let size = Some(Vec2::new(viewport, 240.));
-            if sprite.custom_size != size {
-                sprite.custom_size = size;
-            }
-            continue;
-        }
-        let scale = Vec3::splat((viewport / WIDTH as f32).min(1.));
+        let scale = scales[usize::from(canvas.0.is_some())];
         if pose.scale != scale {
             pose.scale = scale;
         }
-        let Some((session, age)) = active else {
+        let (Some((session, age)), Some((image, material))) = (active, &canvas.0) else {
             continue;
         };
-        if fresh && let Some(image) = images.get_mut(&sprite.image) {
+        if fresh && let Some(image) = images.get_mut(image) {
             let phase = if age < 401 { age } else { age - 401 } % TICKS_PER_FRAME;
             let next = if phase == 0 {
                 &feedback.pixels
@@ -248,6 +256,8 @@ pub(crate) fn draw(
                 )
             };
             cry::write_feedback(image, &feedback.pixels, next, phase);
+            // Updating the texture replaces its GPU view; refresh the material binding too.
+            let _ = materials.get_mut(material);
         }
     }
 }
