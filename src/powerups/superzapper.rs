@@ -20,7 +20,7 @@ use crate::{
     game::{Game, Status},
     glider::Glider,
     level::Level,
-    messages::{Id, message_mesh},
+    messages::Id,
     web::{FRONT_RADIUS, WORLD_UNIT, Web},
 };
 use bevy::{camera::visibility::RenderLayers, prelude::*};
@@ -226,7 +226,7 @@ pub(crate) fn setup(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    let mesh = meshes.add(message_mesh(Vec::new()));
+    let mesh = meshes.add(crate::mesh::colored_mesh(Vec::new()));
     commands.spawn((
         Mesh3d(mesh.clone()),
         MeshMaterial3d(materials.add(StandardMaterial {
@@ -340,7 +340,7 @@ pub(crate) fn draw(
     // An empty mesh stays empty, so skip re-uploading it on the frames without a bolt.
     let was_empty = std::mem::replace(&mut *empty, triangles.is_empty());
     if !(was_empty && *empty) {
-        *meshes.get_mut(&assets.0).unwrap() = message_mesh(triangles);
+        *meshes.get_mut(&assets.0).unwrap() = crate::mesh::colored_mesh(triangles);
     }
 }
 

@@ -10,7 +10,6 @@ mod solid;
 
 use bevy::prelude::*;
 pub(crate) use catalog::Id;
-pub(crate) use render::message_mesh;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct Event {

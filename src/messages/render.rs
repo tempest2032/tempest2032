@@ -2,9 +2,7 @@ use super::{
     Messages,
     font::{Font, GlyphTriangle},
 };
-use bevy::{
-    asset::RenderAssetUsages, camera::visibility::RenderLayers, mesh::PrimitiveTopology, prelude::*,
-};
+use bevy::{asset::RenderAssetUsages, camera::visibility::RenderLayers, prelude::*};
 use std::collections::HashMap;
 
 #[derive(Component)]
@@ -21,7 +19,7 @@ pub(super) fn setup(
     mut meshes: ResMut<bevy::asset::Assets<Mesh>>,
     mut materials: ResMut<bevy::asset::Assets<StandardMaterial>>,
 ) {
-    let mesh = meshes.add(message_mesh(Vec::new()));
+    let mesh = meshes.add(crate::mesh::colored_mesh(Vec::new()));
     // The overlay camera shares the former 2D layer's 240-line orthographic view.
     commands.spawn((
         Graphic,
@@ -133,7 +131,7 @@ pub(super) fn draw(
         }
     }
     if let Some(mesh) = meshes.get_mut(&assets.mesh) {
-        *mesh = message_mesh(triangles);
+        *mesh = crate::mesh::colored_mesh(triangles);
         mesh.asset_usage = RenderAssetUsages::RENDER_WORLD;
     }
     *drawn = frame;
@@ -142,23 +140,6 @@ pub(super) fn draw(
 fn cell_point(point: Vec2, center: Vec2, scale: Vec2, shear: f32) -> Vec2 {
     let local = center * scale + (point - center) * scale.min(Vec2::ONE);
     Vec2::new(local.x + local.y * shear, local.y - local.x * shear * 0.5)
-}
-
-pub(crate) fn message_mesh(triangles: Vec<[(Vec3, Color); 3]>) -> Mesh {
-    let mut positions = Vec::with_capacity(triangles.len() * 3);
-    let mut colors = Vec::with_capacity(triangles.len() * 3);
-    for triangle in triangles {
-        for (position, color) in triangle {
-            positions.push(position.to_array());
-            colors.push(color.to_linear().to_f32_array());
-        }
-    }
-    Mesh::new(
-        PrimitiveTopology::TriangleList,
-        RenderAssetUsages::default(),
-    )
-    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
-    .with_inserted_attribute(Mesh::ATTRIBUTE_COLOR, colors)
 }
 
 #[cfg(test)]
