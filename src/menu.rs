@@ -196,12 +196,26 @@ pub(crate) fn add_systems(app: &mut App) {
                 .after(crate::gamepad::map_controllers)
                 .before(crate::pause::input),
         )
-        .add_systems(Update, draw)
+        .add_systems(Update, (draw, cover_gameplay))
         .add_systems(Update, draw_game_over_hint);
     lettering::add_systems(app);
     #[cfg(not(target_arch = "wasm32"))]
     app.add_systems(Update, installation.before(draw));
     background::add_systems(app);
+}
+
+/// The opaque menus hide the game, so stop rendering it underneath.
+#[allow(clippy::type_complexity)]
+fn cover_gameplay(
+    front: Res<FrontEnd>,
+    mut cameras: Query<&mut Camera, Or<(With<crate::camera::WebCamera>, With<Camera2d>)>>,
+) {
+    let active = front.screen == Screen::Gameplay;
+    for mut camera in &mut cameras {
+        if camera.is_active != active {
+            camera.is_active = active;
+        }
+    }
 }
 
 fn confirm(keys: &ButtonInput<KeyCode>) -> bool {
