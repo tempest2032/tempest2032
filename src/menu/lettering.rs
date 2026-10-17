@@ -7,17 +7,17 @@ use crate::{
     scores::{Entry, Store},
 };
 use bevy::{
-    camera::{RenderTarget, ScalingMode, visibility::RenderLayers},
+    camera::{ScalingMode, Viewport, visibility::RenderLayers},
     core_pipeline::tonemapping::Tonemapping,
     prelude::*,
-    render::render_resource::TextureFormat,
+    ui::UiGlobalTransform,
 };
 
 #[derive(Component)]
 pub(super) struct Canvas;
 
 #[derive(Component)]
-struct PanelCamera;
+pub(super) struct PanelCamera;
 
 #[derive(Component)]
 pub(super) struct LetteringMesh;
@@ -47,41 +47,33 @@ pub(super) fn add_systems(app: &mut App) {
 
 pub(super) fn setup(
     commands: &mut Commands,
-    images: &mut Assets<Image>,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-) -> Entity {
-    let target = images.add(Image::new_target_texture(
-        1,
-        1,
-        TextureFormat::Rgba8UnormSrgb,
-        None,
-    ));
-    let camera = commands
-        .spawn((
-            PanelCamera,
-            OverlayCamera,
-            Camera3d::default(),
-            Camera {
-                order: -1,
-                clear_color: ClearColorConfig::Custom(Color::NONE),
-                ..default()
+) {
+    // Draws into the canvas node's rectangle of the window, after the UI.
+    commands.spawn((
+        PanelCamera,
+        OverlayCamera,
+        Camera3d::default(),
+        Camera {
+            order: 4,
+            is_active: false,
+            clear_color: ClearColorConfig::None,
+            ..default()
+        },
+        Projection::Orthographic(OrthographicProjection {
+            scaling_mode: ScalingMode::AutoMin {
+                min_width: 560.,
+                min_height: 390.,
             },
-            RenderTarget::Image(target.into()),
-            Projection::Orthographic(OrthographicProjection {
-                scaling_mode: ScalingMode::AutoMin {
-                    min_width: 560.,
-                    min_height: 390.,
-                },
-                ..OrthographicProjection::default_3d()
-            }),
-            Transform::from_xyz(0., 0., 100.),
-            RenderLayers::layer(4),
-            bevy::render::view::NoIndirectDrawing,
-            Tonemapping::None,
-            Msaa::Sample4,
-        ))
-        .id();
+            ..OrthographicProjection::default_3d()
+        }),
+        Transform::from_xyz(0., 0., 100.),
+        RenderLayers::layer(4),
+        bevy::render::view::NoIndirectDrawing,
+        Tonemapping::None,
+        Msaa::Sample4,
+    ));
     let mesh = meshes.add(geometry::mesh(Vec::new()));
     commands.spawn((
         LetteringMesh,
@@ -98,7 +90,24 @@ pub(super) fn setup(
         mesh,
         previous: None,
     });
-    camera
+}
+
+/// The canvas node's rectangle in physical window pixels, once laid out.
+fn viewport(node: &ComputedNode, transform: &UiGlobalTransform, window: UVec2) -> Option<Viewport> {
+    let position = (transform.translation - node.size() / 2.)
+        .round()
+        .max(Vec2::ZERO)
+        .as_uvec2();
+    let size = node
+        .size()
+        .round()
+        .as_uvec2()
+        .min(window.saturating_sub(position));
+    (size.x > 0 && size.y > 0).then(|| Viewport {
+        physical_position: position,
+        physical_size: size,
+        ..default()
+    })
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -110,9 +119,21 @@ fn draw(
     mut graphics: ResMut<Graphics>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut camera: Single<(&mut Camera, &mut Projection), With<PanelCamera>>,
+    canvas: Single<(&ComputedNode, &UiGlobalTransform), With<Canvas>>,
+    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
     mut scaled: Local<Option<Screen>>,
 ) {
-    let active = matches!(front.screen, Screen::Welcome | Screen::Initials);
+    let window = windows
+        .iter()
+        .next()
+        .map_or(UVec2::ZERO, |w| w.physical_size());
+    let viewport = viewport(canvas.0, canvas.1, window)
+        .filter(|_| matches!(front.screen, Screen::Welcome | Screen::Initials));
+    let active = viewport.is_some();
+    let rect = |v: &Option<Viewport>| v.as_ref().map(|v| (v.physical_position, v.physical_size));
+    if rect(&camera.0.viewport) != rect(&viewport) {
+        camera.0.viewport = viewport;
+    }
     if camera.0.is_active != active {
         camera.0.is_active = active;
     }

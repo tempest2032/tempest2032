@@ -345,7 +345,14 @@ starfield. For flat webs, it moves slightly above the plane to reveal the depth
 without tilting the view. The score lettering renders above the web. Preview
 framing may recenter the mesh for this purpose; gameplay retains its original
 web origin and tracking camera.
-The viewport renders at its actual displayed resolution and aspect ratio.
+The preview and the score lettering render straight into the window, sharing
+its multisampled targets instead of allocating offscreen images. The preview
+camera clears the window to black behind every menu screen and draws the menu
+stars, built like the gameplay star field's one-pixel quads, and on Welcome the
+web. The lettering camera follows the canvas node's rectangle and draws after
+the UI, so the overlay camera stays the default UI camera. While a menu is
+shown, the gameplay cameras are inactive and the overlay camera renders only
+the UI, not its HUD layer.
 The preview camera carries `OverlayCamera` and its own render layer, so playing,
 retrying, warping, or returning to Welcome cannot move it. Geometry is rebuilt
 only when the selected web or viewport size changes. The web makes one full
@@ -1424,7 +1431,7 @@ and starts a fresh game.
 ## Antialiasing
 
 All geometry cameras, including both gameplay layers, the 2D effects layer,
-the 3D HUD, and offscreen welcome-screen models, use explicit 4× MSAA. A single
+the 3D HUD, and the welcome-screen models, use explicit 4× MSAA. A single
 FXAA pass on the final 3D overlay camera smooths remaining high-contrast edges
 after the scene layers are combined. UI text uses Bevy's font antialiasing;
 original bitmap feedback and particle effects retain their original resolution.

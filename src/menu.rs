@@ -17,7 +17,6 @@ use bevy::{
         keyboard::{Key, KeyboardFocusLost, KeyboardInput},
     },
     prelude::*,
-    ui::widget::ViewportNode,
     window::Ime,
 };
 #[cfg(not(target_arch = "wasm32"))]
@@ -204,17 +203,26 @@ pub(crate) fn add_systems(app: &mut App) {
     background::add_systems(app);
 }
 
-/// The opaque menus hide the game, so stop rendering it underneath.
+/// Menus replace the game, so stop rendering it underneath. The overlay camera
+/// keeps rendering the UI, but not the HUD and messages on its layer.
 #[allow(clippy::type_complexity)]
 fn cover_gameplay(
     front: Res<FrontEnd>,
     mut cameras: Query<&mut Camera, Or<(With<crate::camera::WebCamera>, With<Camera2d>)>>,
+    mut overlay: Query<&mut bevy::camera::visibility::RenderLayers, With<IsDefaultUiCamera>>,
 ) {
     let active = front.screen == Screen::Gameplay;
     for mut camera in &mut cameras {
         if camera.is_active != active {
             camera.is_active = active;
         }
+    }
+    for mut layers in &mut overlay {
+        layers.set_if_neq(if active {
+            bevy::camera::visibility::RenderLayers::layer(3)
+        } else {
+            bevy::camera::visibility::RenderLayers::none()
+        });
     }
 }
 
@@ -526,9 +534,8 @@ fn setup(
         )
         .unwrap(),
     );
-    let lettering = lettering::setup(&mut commands, &mut images, &mut meshes, &mut materials);
-    let preview =
-        background::setup_preview(&mut commands, &mut images, &mut meshes, &mut materials);
+    lettering::setup(&mut commands, &mut meshes, &mut materials);
+    background::setup_preview(&mut commands, &mut meshes, &mut materials);
     commands.spawn((
         GameOverHint,
         Text::default(),
@@ -558,30 +565,10 @@ fn setup(
                 justify_content: JustifyContent::Center,
                 ..default()
             },
+            // The menu cameras clear the window to black behind the UI.
             GlobalZIndex(10),
-            BackgroundColor(Color::BLACK),
         ))
         .with_children(|root| {
-            root.spawn((
-                background::Canvas,
-                Node {
-                    position_type: PositionType::Absolute,
-                    width: percent(100),
-                    height: percent(100),
-                    overflow: Overflow::clip(),
-                    ..default()
-                },
-            ));
-            root.spawn((
-                background::PreviewCanvas,
-                ViewportNode::new(preview),
-                Node {
-                    position_type: PositionType::Absolute,
-                    width: percent(100),
-                    height: percent(100),
-                    ..default()
-                },
-            ));
             root.spawn((
                 Panel,
                 Node {
@@ -619,7 +606,6 @@ fn setup(
                     .with_children(|body| {
                         body.spawn((
                             lettering::Canvas,
-                            ViewportNode::new(lettering),
                             Node {
                                 position_type: PositionType::Absolute,
                                 width: percent(100),
@@ -687,18 +673,12 @@ fn draw(
     mut illustrated_nodes: Query<
         &mut Node,
         (
-            Or<(
-                With<Logo>,
-                With<Body>,
-                With<lettering::Canvas>,
-                With<background::PreviewCanvas>,
-            )>,
+            Or<(With<Logo>, With<Body>, With<lettering::Canvas>)>,
             Without<Root>,
             Without<Panel>,
             Without<Label>,
         ),
     >,
-    preview_nodes: Query<Entity, With<background::PreviewCanvas>>,
     mut labels: Query<
         (&Label, &mut Text, &mut TextFont, &mut Node),
         (Without<Root>, Without<Panel>),
@@ -732,11 +712,6 @@ fn draw(
     }
     for mut node in &mut illustrated_nodes {
         show(&mut node, illustrated);
-    }
-    for entity in &preview_nodes {
-        if let Ok(mut node) = illustrated_nodes.get_mut(entity) {
-            show(&mut node, screen == Screen::Welcome);
-        }
     }
     let (title, body, footer) = match screen {
         Screen::Welcome => {

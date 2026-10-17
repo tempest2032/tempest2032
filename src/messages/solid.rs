@@ -45,6 +45,8 @@ fn setup(
 ) {
     commands.spawn((
         OverlayCamera,
+        // Later window cameras, such as the menu lettering, must not take over the UI.
+        IsDefaultUiCamera,
         // A few small, changing overlay meshes use direct draws.
         bevy::render::view::NoIndirectDrawing,
         Camera3d::default(),

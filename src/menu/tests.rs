@@ -343,13 +343,34 @@ fn welcome_and_initials_share_the_scalable_panel_and_restore_other_menu_screens(
     }];
     app.world_mut().resource_mut::<FrontEnd>().highlight = Some((Difficulty::Normal, 0));
     app.update();
+    // Stand in for UI layout, which places the canvas the lettering camera follows.
+    let canvas = app
+        .world_mut()
+        .query_filtered::<Entity, With<lettering::Canvas>>()
+        .single(app.world())
+        .unwrap();
+    app.world_mut().entity_mut(canvas).insert((
+        ComputedNode {
+            size: Vec2::new(800., 400.),
+            ..default()
+        },
+        bevy::ui::UiGlobalTransform::from_xy(640., 400.),
+    ));
+    app.update();
     let scores = app
         .world_mut()
         .query_filtered::<Entity, With<lettering::Canvas>>()
         .single(app.world())
         .unwrap();
-    let camera = app.world().get::<ViewportNode>(scores).unwrap().camera;
-    assert!(app.world().get::<Camera>(camera).unwrap().is_active);
+    let camera = app
+        .world_mut()
+        .query_filtered::<Entity, With<lettering::PanelCamera>>()
+        .single(app.world())
+        .unwrap();
+    let panel = app.world().get::<Camera>(camera).unwrap();
+    assert!(panel.is_active);
+    let viewport = panel.viewport.as_ref().unwrap();
+    assert!(viewport.physical_size.x > 0 && viewport.physical_size.y > 0);
     let mesh = app
         .world_mut()
         .query_filtered::<&Mesh3d, With<lettering::LetteringMesh>>()

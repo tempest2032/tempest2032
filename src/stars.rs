@@ -199,16 +199,14 @@ pub(crate) fn draw_stars(
     mut field: Single<(&Mesh3d, &mut Transform), With<StarField>>,
     front: Option<Res<crate::menu::FrontEnd>>,
 ) {
-    // The opaque menu root covers the field outside gameplay.
+    // Menus draw their own star field with the preview camera.
     if front.is_some_and(|front| front.screen != crate::menu::Screen::Gameplay) {
         return;
     }
     let Some((camera, Projection::Perspective(projection))) = cameras.iter().next() else {
         return;
     };
-    let half_height = BACKGROUND_DISTANCE * (projection.fov * 0.5).tan();
-    let half_width = half_height * projection.aspect_ratio;
-    let pixel = 2.0 * half_width / 384.0;
+    let (pose, half, pixel) = background_plane(camera, projection);
     let bonus = game
         .as_ref()
         .filter(|game| game.status == Status::Bonus)
@@ -246,24 +244,55 @@ pub(crate) fn draw_stars(
         &stars.0
     };
     let particles = bonus.is_some_and(|session| session.kind != crate::warp::ZoneKind::GateFlight);
-    let triangles = stars.iter().filter(|_| !particles).flat_map(|star| {
-        (0..=warp.copies)
-            .filter_map(move |index| {
-                let star = Star {
-                    position: star.position,
-                    depth: (star.depth - warp.distance + i32::from(index) * warp.spacing)
-                        .rem_euclid(DEPTH_WRAP),
-                    color: star.color,
-                };
-                let centre = if bonus.is_some() {
-                    star.projected(Vec2::ZERO) * pixel
-                } else {
-                    star.background_position(camera)?
-                };
-                if centre.x.abs() > half_width || centre.y.abs() > half_height {
-                    return None;
-                }
-                let color = star.color();
+    let centres = stars.iter().filter(|_| !particles).flat_map(|star| {
+        (0..=warp.copies).filter_map(move |index| {
+            let star = Star {
+                position: star.position,
+                depth: (star.depth - warp.distance + i32::from(index) * warp.spacing)
+                    .rem_euclid(DEPTH_WRAP),
+                color: star.color,
+            };
+            let centre = if bonus.is_some() {
+                star.projected(Vec2::ZERO) * pixel
+            } else {
+                star.background_position(camera)?
+            };
+            Some((centre, star.color()))
+        })
+    });
+    let (mesh, transform) = &mut *field;
+    if let Some(mesh) = meshes.get_mut(&mesh.0) {
+        *mesh = star_mesh(centres, half, pixel);
+    }
+    **transform = pose;
+}
+
+/// The camera-aligned plane stars are drawn on: its pose, its half extent, and the
+/// size there of one pixel of the original 384-wide screen.
+pub(crate) fn background_plane(
+    camera: &Transform,
+    projection: &PerspectiveProjection,
+) -> (Transform, Vec2, f32) {
+    let half_height = BACKGROUND_DISTANCE * (projection.fov * 0.5).tan();
+    let half = Vec2::new(half_height * projection.aspect_ratio, half_height);
+    let pose = Transform::from_translation(
+        camera.translation + camera.rotation * Vec3::NEG_Z * BACKGROUND_DISTANCE,
+    )
+    .with_rotation(camera.rotation);
+    (pose, half, 2.0 * half.x / 384.0)
+}
+
+/// One-pixel quads at star centres on the background plane, skipping stars outside it.
+pub(crate) fn star_mesh(
+    stars: impl IntoIterator<Item = (Vec2, Color)>,
+    half: Vec2,
+    pixel: f32,
+) -> Mesh {
+    colored_mesh(
+        stars
+            .into_iter()
+            .filter(move |(centre, _)| centre.x.abs() <= half.x && centre.y.abs() <= half.y)
+            .flat_map(move |(centre, color)| {
                 let quad = [
                     Vec2::new(-0.5, -0.5),
                     Vec2::new(0.5, -0.5),
@@ -271,17 +300,9 @@ pub(crate) fn draw_stars(
                     Vec2::new(-0.5, 0.5),
                 ]
                 .map(|corner| ((centre + corner * pixel).extend(0.0), color));
-                Some([[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]])
-            })
-            .flatten()
-    });
-    let (mesh, transform) = &mut *field;
-    if let Some(mesh) = meshes.get_mut(&mesh.0) {
-        *mesh = colored_mesh(triangles);
-    }
-    transform.translation =
-        camera.translation + camera.rotation * Vec3::NEG_Z * BACKGROUND_DISTANCE;
-    transform.rotation = camera.rotation;
+                [[quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]]
+            }),
+    )
 }
 
 #[cfg(test)]

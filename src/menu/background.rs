@@ -1,4 +1,5 @@
-//! Independent level-two stars and a rotating, native-resolution web preview.
+//! Menu backdrop drawn straight into the window: independent level-two stars on
+//! every menu screen and, on Welcome, a rotating, native-resolution web preview.
 
 use super::{FrontEnd, Screen};
 use crate::{
@@ -6,27 +7,16 @@ use crate::{
     messages::geometry::OverlayCamera,
     web::{BACK_RADIUS, FRONT_RADIUS, Web},
 };
-use bevy::{
-    camera::{RenderTarget, visibility::RenderLayers},
-    core_pipeline::tonemapping::Tonemapping,
-    prelude::*,
-    render::render_resource::TextureFormat,
-};
+use bevy::{camera::visibility::RenderLayers, core_pipeline::tonemapping::Tonemapping, prelude::*};
 
 #[derive(Component)]
-pub(super) struct Canvas;
-
-#[derive(Component)]
-struct Star(crate::stars::Star);
+struct PreviewStars(Vec<crate::stars::Star>);
 
 #[derive(Component)]
 struct PreviewCamera;
 
 #[derive(Component)]
 struct PreviewWeb;
-
-#[derive(Component)]
-pub(super) struct PreviewCanvas;
 
 const ROTATION_SPEED: f32 = std::f32::consts::TAU / 20.;
 
@@ -36,40 +26,17 @@ struct PreviewAssets {
 }
 
 pub(super) fn add_systems(app: &mut App) {
-    app.add_systems(Startup, setup.after(super::setup))
-        .add_systems(
-            Update,
-            (advance, update_web_preview).chain().after(super::draw),
-        );
-}
-
-fn setup(mut commands: Commands, canvas: Single<Entity, With<Canvas>>) {
-    commands.entity(*canvas).with_children(|canvas| {
-        for star in crate::stars::Pattern::Level.stars(2) {
-            canvas.spawn((
-                Star(star),
-                Node {
-                    position_type: PositionType::Absolute,
-                    ..default()
-                },
-                BackgroundColor(Color::BLACK),
-            ));
-        }
-    });
+    app.add_systems(
+        Update,
+        (update_web_preview, advance).chain().after(super::draw),
+    );
 }
 
 pub(super) fn setup_preview(
     commands: &mut Commands,
-    images: &mut Assets<Image>,
     meshes: &mut Assets<Mesh>,
     materials: &mut Assets<StandardMaterial>,
-) -> Entity {
-    let image = images.add(Image::new_target_texture(
-        1,
-        1,
-        TextureFormat::Rgba8UnormSrgb,
-        None,
-    ));
+) {
     let mesh = meshes.add(crate::mesh::colored_mesh([]));
     let material = materials.add(StandardMaterial {
         base_color: Color::WHITE,
@@ -77,39 +44,45 @@ pub(super) fn setup_preview(
         cull_mode: None,
         ..default()
     });
-    let camera = commands
-        .spawn((
-            PreviewCamera,
-            OverlayCamera,
-            Camera3d::default(),
-            Camera {
-                order: -2,
-                is_active: false,
-                clear_color: ClearColorConfig::Custom(Color::NONE),
-                ..default()
-            },
-            RenderTarget::Image(image.into()),
-            Projection::Perspective(PerspectiveProjection {
-                fov: 0.88,
-                ..default()
-            }),
-            Transform::default(),
-            RenderLayers::layer(5),
-            bevy::render::view::NoIndirectDrawing,
-            Tonemapping::None,
-            Msaa::Sample4,
-        ))
-        .id();
+    // Sharing the window's targets avoids a separate full-screen MSAA image.
+    commands.spawn((
+        PreviewCamera,
+        OverlayCamera,
+        Camera3d::default(),
+        Camera {
+            order: -2,
+            is_active: false,
+            clear_color: ClearColorConfig::Custom(Color::BLACK),
+            ..default()
+        },
+        Projection::Perspective(PerspectiveProjection {
+            fov: 0.88,
+            ..default()
+        }),
+        Transform::default(),
+        RenderLayers::layer(5),
+        bevy::render::view::NoIndirectDrawing,
+        Tonemapping::None,
+        Msaa::Sample4,
+    ));
     commands.spawn((
         PreviewWeb,
         Mesh3d(mesh.clone()),
         MeshMaterial3d(material.clone()),
         Transform::default(),
+        Visibility::default(),
+        RenderLayers::layer(5),
+        bevy::camera::visibility::NoFrustumCulling,
+    ));
+    commands.spawn((
+        PreviewStars(crate::stars::Pattern::Level.stars(2)),
+        Mesh3d(meshes.add(crate::mesh::colored_mesh([]))),
+        MeshMaterial3d(material),
+        Transform::default(),
         RenderLayers::layer(5),
         bevy::camera::visibility::NoFrustumCulling,
     ));
     commands.insert_resource(PreviewAssets { mesh });
-    camera
 }
 
 fn edge(a: Vec3, b: Vec3, width: f32, colors: [Color; 2]) -> Vec<[(Vec3, Color); 3]> {
@@ -200,18 +173,24 @@ fn update_web_preview(
         (&mut Camera, &mut Projection, &mut Transform),
         (With<PreviewCamera>, Without<PreviewWeb>),
     >,
-    mut web: Single<&mut Transform, With<PreviewWeb>>,
+    mut web: Single<(&mut Transform, &mut Visibility), With<PreviewWeb>>,
     assets: Res<PreviewAssets>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut last: Local<Option<(usize, UVec2)>>,
     mut center: Local<Vec3>,
     mut angle: Local<f32>,
 ) {
-    let active = front.screen == Screen::Welcome;
+    let active = front.screen != Screen::Gameplay;
     if camera.0.is_active != active {
         camera.0.is_active = active;
     }
-    if !active {
+    let welcome = front.screen == Screen::Welcome;
+    web.1.set_if_neq(if welcome {
+        Visibility::Inherited
+    } else {
+        Visibility::Hidden
+    });
+    if !welcome {
         return;
     }
     let selected = front.preview_level();
@@ -235,40 +214,44 @@ fn update_web_preview(
     }
     *angle =
         (*angle + time.delta_secs().min(0.1) * ROTATION_SPEED).rem_euclid(std::f32::consts::TAU);
-    **web = rotation_pose(*center, *angle);
+    *web.0 = rotation_pose(*center, *angle);
 }
 
+#[allow(clippy::type_complexity)]
 fn advance(
     front: Res<FrontEnd>,
     time: Res<Time<Real>>,
-    windows: Query<&Window, With<bevy::window::PrimaryWindow>>,
+    camera: Single<(&Transform, &Projection), With<PreviewCamera>>,
+    mut stars: Single<(&mut PreviewStars, &Mesh3d, &mut Transform), Without<PreviewCamera>>,
+    mut meshes: ResMut<Assets<Mesh>>,
     mut fraction: Local<f32>,
-    mut stars: Query<(&mut Star, &mut Node, &mut BackgroundColor)>,
 ) {
+    let (camera, Projection::Perspective(projection)) = *camera else {
+        return;
+    };
     if front.screen == Screen::Gameplay {
         return;
     }
-    let Some(window) = windows.iter().next() else {
-        return;
-    };
     // Limit motion after suspension, without advancing the gameplay star field.
     *fraction += time.delta_secs().min(0.1) * 60. * crate::stars::STEP as f32;
     let step = *fraction as i32;
     *fraction -= step as f32;
-    let scale = window.height() / 240.;
-    let size = scale.max(1.);
-    for (mut star, mut node, mut color) in &mut stars {
-        star.0.advance(step);
-        let position =
-            star.0.projected(Vec2::ZERO) * scale + Vec2::new(window.width(), window.height()) / 2.;
-        node.left = px(position.x - size / 2.);
-        node.top = px(position.y - size / 2.);
-        if node.width != px(size) {
-            node.width = px(size);
-            node.height = px(size);
-        }
-        color.set_if_neq(BackgroundColor(star.0.color()));
+    let (field, mesh, pose) = &mut *stars;
+    for star in &mut field.0 {
+        star.advance(step);
     }
+    let (plane, half, pixel) = crate::stars::background_plane(camera, projection);
+    if let Some(mesh) = meshes.get_mut(&mesh.0) {
+        *mesh = crate::stars::star_mesh(
+            field
+                .0
+                .iter()
+                .map(|star| (star.projected(Vec2::ZERO) * pixel, star.color())),
+            half,
+            pixel,
+        );
+    }
+    pose.set_if_neq(plane);
 }
 
 #[cfg(test)]
@@ -367,10 +350,9 @@ mod tests {
             .add_systems(
                 Startup,
                 |mut commands: Commands,
-                 mut images: ResMut<Assets<Image>>,
                  mut meshes: ResMut<Assets<Mesh>>,
                  mut materials: ResMut<Assets<StandardMaterial>>| {
-                    setup_preview(&mut commands, &mut images, &mut meshes, &mut materials);
+                    setup_preview(&mut commands, &mut meshes, &mut materials);
                 },
             )
             .add_systems(
@@ -417,8 +399,10 @@ mod tests {
         assert!(!app.world().get::<Camera>(entity).unwrap().is_active);
         assert_eq!(*app.world().get::<Transform>(entity).unwrap(), original);
         assert_eq!(*app.world().get::<Transform>(model).unwrap(), spun);
-        assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 1);
-        assert_eq!(app.world().resource::<Assets<Image>>().len(), 1);
+        // The web and the star field.
+        assert_eq!(app.world().resource::<Assets<Mesh>>().len(), 2);
+        // The preview draws into the window rather than an offscreen image.
+        assert_eq!(app.world().resource::<Assets<Image>>().len(), 0);
         assert_eq!(app.world().resource::<Assets<StandardMaterial>>().len(), 1);
     }
 }
