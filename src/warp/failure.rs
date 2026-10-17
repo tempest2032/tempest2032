@@ -171,6 +171,8 @@ pub(crate) fn draw(
                 Image::new_target_texture(size.x, size.y, TextureFormat::Rgba8UnormSrgb, None);
             image.texture_descriptor.usage |=
                 bevy::render::render_resource::TextureUsages::COPY_SRC;
+            // A render target needs no zeroed, window-sized copy in main memory.
+            image.data = None;
             let target = images.add(image);
             let snapshots: Vec<_> = cameras
                 .iter()
