@@ -4,7 +4,7 @@ use clap::ValueEnum;
 #[test]
 fn glyph_cache_starts_without_fragmentation_and_keeps_no_spare_triangle_capacity() {
     let glyphs = Glyphs::default();
-    for glyph in glyphs.0.values() {
+    for glyph in glyphs.glyphs.values().filter_map(OnceLock::get) {
         assert_eq!(glyph.triangles.len(), glyph.triangles.capacity());
         assert!(glyph.fragments.get().is_none_or(|f| f.is_empty()));
     }
@@ -59,7 +59,10 @@ fn all_catalog_letters_have_opaque_finite_beveled_geometry_with_real_depth() {
                 announcements.contains_key(&c),
                 "missing rounded announcement glyph {c}"
             );
-            assert!(glyphs.0.contains_key(&(c, Style::Chrome)), "missing {c}");
+            assert!(
+                glyphs.glyphs.contains_key(&(c, Style::Chrome)),
+                "missing {c}"
+            );
             for style in [Style::Chrome, Style::Rainbow, Style::Gold] {
                 let glyph = glyphs.get(c, style);
                 assert!(!glyph.triangles.is_empty(), "empty {c:?}/{style:?}");
@@ -162,4 +165,14 @@ fn opaque_mesh_has_finite_normals_and_has_no_low_resolution_texture_coordinates(
     assert!(normals.iter().any(|p| p[2] < -0.99));
     assert!(normals.iter().any(|p| p[0].abs() > 0.5));
     assert!(mesh.attribute(Mesh::ATTRIBUTE_UV_0).is_none());
+}
+
+#[test]
+fn only_glyphs_drawn_during_play_are_built_upfront() {
+    let glyphs = Glyphs::default();
+    let built = |c, style| glyphs.glyphs[&(c, style)].get().is_some();
+    assert!(built('S', Style::Chrome) && built('7', Style::Rainbow));
+    assert!(!built('S', Style::Rainbow) && !built('P', Style::Gold));
+    assert!(!glyphs.get('P', Style::Gold).triangles.is_empty());
+    assert!(built('P', Style::Gold));
 }

@@ -1955,6 +1955,9 @@ exit/death recording. Restart clears messages, independent effects, and timers.
 Assets are embedded; [assets/messages/README.md](../assets/messages/README.md) documents their provenance and
 `tools/message_font.py` regenerates the contours from the original source tree.
 The message renderer caches glyph volumes, fragment layouts, and linear colours.
+Announcement glyphs and score digits are built at startup, because they appear
+mid-game; the rainbow letters and gold pause lettering are built the first time
+a menu or the pause screen shows them.
 Unchanged frames, including paused or frozen previews, reuse the existing meshes.
 The original approach effects keep their separate renderer, drawn through the overlay camera behind the HUD. A manual CPU benchmark is available with
 `cargo test --release benchmark_recharge_rendering -- --ignored --nocapture`.

@@ -49,52 +49,63 @@ impl Glyph {
     }
 }
 
+const CHARACTERS: &str = " !(),-.:?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+
+/// Extruded glyphs, built on first use except those gameplay draws, so menu- and
+/// pause-only styles cost neither startup time nor memory until shown.
 #[derive(Resource)]
-pub(crate) struct Glyphs(HashMap<(char, Style), Glyph>);
+pub(crate) struct Glyphs {
+    glyphs: HashMap<(char, Style), OnceLock<Glyph>>,
+    announcements: HashMap<char, Vec<Vec<Vec2>>>,
+}
 
 impl Default for Glyphs {
     fn default() -> Self {
-        let mut glyphs = HashMap::new();
-        let announcements = super::lettering::contours();
-        for character in " !(),-.:?0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ".chars() {
-            let contours = outline(character);
-            let chrome = announcements
-                .get(&character)
-                .cloned()
-                .unwrap_or_else(|| contours.iter().map(|p| rounded(p, 1.25)).collect());
-            for style in [Style::Chrome, Style::Rainbow, Style::Gold] {
-                let gold_a = vec![
-                    polygon(&[
-                        (0., 18.),
-                        (0., 4.),
-                        (4., 0.),
-                        (11., 0.),
-                        (15., 4.),
-                        (15., 18.),
-                        (11., 18.),
-                        (11., 12.),
-                        (4., 12.),
-                        (4., 18.),
-                    ]),
-                    rect(4., 4., 7., 4.),
-                ];
-                glyphs.insert(
-                    (character, style),
-                    extrude(
-                        if style == Style::Chrome {
-                            &chrome
-                        } else if style == Style::Gold && character == 'A' {
-                            &gold_a
-                        } else {
-                            &contours
-                        },
-                        &Paint::new(style),
-                    ),
-                );
-            }
+        let glyphs = Self {
+            glyphs: CHARACTERS
+                .chars()
+                .flat_map(|c| {
+                    [Style::Chrome, Style::Rainbow, Style::Gold].map(|s| ((c, s), OnceLock::new()))
+                })
+                .collect(),
+            announcements: super::lettering::contours(),
+        };
+        // Announcements and score digits appear mid-game, where a build could cost a frame.
+        for character in CHARACTERS.chars() {
+            glyphs.get(character, Style::Chrome);
         }
-        Self(glyphs)
+        for digit in '0'..='9' {
+            glyphs.get(digit, Style::Rainbow);
+        }
+        glyphs
     }
+}
+
+fn build(character: char, style: Style, announcements: &HashMap<char, Vec<Vec<Vec2>>>) -> Glyph {
+    let contours = outline(character);
+    let contours = match style {
+        Style::Chrome => announcements
+            .get(&character)
+            .cloned()
+            .unwrap_or_else(|| contours.iter().map(|p| rounded(p, 1.25)).collect()),
+        Style::Gold if character == 'A' => vec![
+            polygon(&[
+                (0., 18.),
+                (0., 4.),
+                (4., 0.),
+                (11., 0.),
+                (15., 4.),
+                (15., 18.),
+                (11., 18.),
+                (11., 12.),
+                (4., 12.),
+                (4., 18.),
+            ]),
+            rect(4., 4., 7., 4.),
+        ],
+        _ => contours,
+    };
+    extrude(&contours, &Paint::new(style))
 }
 
 impl Glyphs {
@@ -122,9 +133,12 @@ impl Glyphs {
     }
 
     pub fn get(&self, character: char, style: Style) -> &Glyph {
-        self.0
-            .get(&(character.to_ascii_uppercase(), style))
-            .unwrap_or(&self.0[&('?', style)])
+        let key = (character.to_ascii_uppercase(), style);
+        let (key, glyph) = self
+            .glyphs
+            .get_key_value(&key)
+            .unwrap_or_else(|| self.glyphs.get_key_value(&('?', style)).unwrap());
+        glyph.get_or_init(|| build(key.0, key.1, &self.announcements))
     }
 }
 
