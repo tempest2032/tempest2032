@@ -51,6 +51,15 @@ pub(crate) enum Effect {
 }
 
 impl Effect {
+    /// The laser sample is much louder than the plain shot, and sustained fire
+    /// retriggers it constantly, so it plays a little quieter.
+    fn gain(self) -> f32 {
+        match self {
+            Self::Laser => 0.6,
+            _ => 1.,
+        }
+    }
+
     fn priority(self) -> u16 {
         match self {
             Self::Shot | Self::Laser => 1,
@@ -451,9 +460,9 @@ fn update(
         let entity = commands
             .spawn((
                 AudioPlayer(audio),
-                settings
-                    .with_speed(speed)
-                    .with_volume(Volume::Linear(if priority >= 100 { 0.7 } else { 0.4 })),
+                settings.with_speed(speed).with_volume(Volume::Linear(
+                    if priority >= 100 { 0.7 } else { 0.4 } * request.effect.gain(),
+                )),
             ))
             .id();
         if request.exit_yes {

@@ -692,8 +692,9 @@ Gameplay-controlled pitch changes still apply to individual sounds.
 
 Spike hits and laser shots each own one dedicated voice. Following `PLAYFX2`'s
 tie-breaking (`moomoo.dat:$4370–$446a`), each new hit or shot replaces the
-previous one instead of stacking copies, so both play at the normal effect level
-during rapid hits or sustained fire. Other one-shot effects share a separate
+previous one instead of stacking copies during rapid hits or sustained fire. The
+laser sample is much louder than the plain shot, so it plays at 0.6 of the
+normal effect level. Other one-shot effects share a separate
 sixteen-voice pool so explosions and announcements remain audible during busy
 scenes. This is a deliberate difference
 from the original, where `START_MOD` leaves only two shared effect voices while
@@ -753,10 +754,7 @@ straight to a modern output at its calculated playback rate instead produces
 a roughly 10 kHz tone with the wrong pitch direction. Earlier inverted or
 offset length curves tried to compensate for that missing output stage and
 have been removed. A spectral regression checks the actual decoded waveform.
-The upgraded laser fires every three ticks instead of four. Its long sample is
-more than twice as loud as the plain shot and overlaps itself during sustained fire.
-It plays at a fifth of the usual effect gain to keep sustained fire in balance
-with the normal shot.
+The upgraded laser fires every three ticks instead of four.
 The converter limits the alternate normal-shot sample
 to its physical boundary and trims the first "sexy yes" sample to its declared
 length. The ROM omits two unused death samples; a ROM-generated pack leaves

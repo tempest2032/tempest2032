@@ -471,10 +471,10 @@ fn spike_hits_and_laser_shots_each_replace_their_single_voice_instead_of_stackin
             DEDICATED.iter().position(|e| *e == effect).unwrap()
         );
         assert!(app.world().resource::<Sounds>().pending.is_empty());
-        // One voice no longer stacks copies, so the effect plays at the normal level.
+        // One voice no longer stacks copies; only the louder laser is trimmed a little.
         assert_eq!(
             app.world().get::<PlaybackSettings>(last).unwrap().volume,
-            Volume::Linear(0.4)
+            Volume::Linear(0.4 * effect.gain())
         );
     }
 }
