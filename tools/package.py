@@ -49,7 +49,7 @@ def native(platform, target, binary, output, smoke_test=False):
                 if (installed / "tempest2032.exe").read_bytes() != binary.read_bytes():
                     raise RuntimeError("Installer did not preserve the standalone executable")
                 if smoke_test:
-                    smoke.run([str(installed / "tempest2032.exe")], output / "smoke")
+                    smoke.run([str(installed / "tempest2032.exe")], output / "smoke", timeout=300)
             finally:
                 subprocess.run([
                     str(installed / "unins000.exe"), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
