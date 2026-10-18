@@ -61,9 +61,13 @@ Then:
   `flatpak install --user ./tempest2032-linux-x86_64.flatpak`, using the arm64
   bundle on arm64 machines. Launch **Tempest 2032** from your applications menu.
 
-The macOS app and Windows installer are not publisher-signed yet. On macOS,
-use **Open Anyway** in System Settings → Privacy & Security if Gatekeeper blocks
-the downloaded app.
+The macOS app and Windows installer are not publisher-signed. On macOS, the
+first launch is blocked with "Apple could not verify…": click **Done**, open
+System Settings → Privacy & Security, scroll down to **Security**, click
+**Open Anyway** next to Tempest 2032, and confirm with your password. Launch the
+game again and choose **Open Anyway** once more; later launches open normally.
+The button only appears for a while after a blocked launch. If the icon keeps
+bouncing without a window, restart the Mac and repeat these steps.
 
 Windows shortcuts, the macOS app, and Flatpak start in fullscreen.
 All game assets and levels are included. Linux needs a graphical desktop and a
