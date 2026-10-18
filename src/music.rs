@@ -126,7 +126,9 @@ fn selected(game: &Game, level: &Level) -> usize {
 }
 
 pub(crate) fn add_systems(app: &mut App) {
+    // The browser's audio plugin does not register audio sources, which setup needs.
     app.add_audio_source::<Track>()
+        .init_resource::<Assets<AudioSource>>()
         .init_resource::<MusicVolume>()
         .add_systems(Startup, setup)
         .add_systems(

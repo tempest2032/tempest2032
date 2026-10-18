@@ -251,3 +251,12 @@ fn soundtrack_downloads_do_not_block_startup() {
     }
     assert!(app.world().resource::<Catalog>().custom.is_empty());
 }
+
+#[test]
+fn music_registers_audio_sources_without_the_native_audio_plugin() {
+    // The browser build's audio plugin leaves this to the game.
+    let mut app = App::new();
+    app.add_plugins((MinimalPlugins, AssetPlugin::default()));
+    add_systems(&mut app);
+    assert!(app.world().contains_resource::<Assets<AudioSource>>());
+}
