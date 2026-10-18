@@ -204,3 +204,7 @@ mod tests {
 #[cfg(test)]
 #[path = "tests/tempo.rs"]
 mod tempo;
+
+#[cfg(test)]
+#[path = "tests/balance.rs"]
+mod balance;

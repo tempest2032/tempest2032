@@ -1350,6 +1350,17 @@ climb, an enemy fires as often per climb, and a Spike reaches the same length.
 Knock-back still uses the unscaled climb speed, so Aliens and Mirrors take the
 same number of hits to destroy on every setting.
 
+A headless balance check plays waves with a scripted, invulnerable player that
+steers to the nearest enemy and fires once it reaches the front half of the web.
+`cargo test --release balance_report -- --ignored --nocapture` prints, for each
+level and setting, the time to clear, enemy shots per minute, the most enemies
+at once, and the power-up drops, followed by catalog totals. A regular test
+checks levels 1, 9, and 33. Over the waves the script clears, Easy takes about
+a third longer with 30% less enemy fire and Hard about a fifth less time with
+30% more fire, while total drops stay within about 1%. Drops can still differ by
+one or two in a level, because intercepted enemy shots count toward the next
+drop, as in the original, and the settings fire different numbers of shots.
+
 Warp zones use the same tempo. Gate flight and the psychedelic rings travel
 forward at the scaled speed while steering keeps its original rates, so gates
 arrive a fifth slower or faster. The tunnel advances whole track segments, with
