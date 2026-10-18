@@ -54,6 +54,7 @@ fn app() -> App {
     .insert_resource(meshes)
     .insert_resource(materials)
     .init_resource::<powerups::Upgrades>()
+    .init_resource::<crate::difficulty::EnemyClock>()
     .init_resource::<ShotAssets>()
     .init_resource::<FlipperAssets>()
     .add_systems(

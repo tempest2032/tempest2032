@@ -17,6 +17,7 @@ fn vector_app() -> App {
         .init_resource::<Assets<StandardMaterial>>()
         .init_resource::<crate::messages::geometry::Glyphs>()
         .init_resource::<crate::game::Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<crate::powerups::Upgrades>()
         .init_resource::<Time<Virtual>>()
         .add_systems(Startup, crate::hud::setup)

@@ -71,7 +71,7 @@ fn selected_gate_is_next_and_inherits_prior_boosts_without_score_announcements()
                 selected.start_at_gate(gate);
                 assert_eq!(selected.speed, played.speed);
                 assert_eq!(selected.passed, usize::from(gate - 1));
-                assert_eq!(selected.step_flight(0, 0), 0);
+                assert_eq!(selected.step_flight(0, 0, selected.speed), 0);
                 assert_eq!(selected.gates.front().unwrap().index, usize::from(gate - 1));
                 let (x, y, _) = selected.spec(usize::from(gate - 1));
                 assert_eq!(selected.position(), Vec2::new(f32::from(x), f32::from(y)));
@@ -154,13 +154,13 @@ fn rings_mirror_courses_use_fixed_spacing_and_keep_original_scoring() {
         assert_eq!(session.rings.as_ref().unwrap().rotation, 1);
     }
     let mut session = Session::new(ZoneKind::Rings, 0, Some(8), 0);
-    session.step_flight(0, 0);
+    session.step_flight(0, 0, session.speed);
     assert_eq!(session.generation_wait, 8);
     for _ in 0..171 {
-        session.step_flight(0, 0);
+        session.step_flight(0, 0, session.speed);
     }
     assert_eq!(session.cursor, 1);
-    session.step_flight(0, 0);
+    session.step_flight(0, 0, session.speed);
     assert_eq!(session.cursor, 2);
 }
 
@@ -172,7 +172,7 @@ fn all_ring_courses_complete_and_settle_the_shared_completion_reward_once() {
             if let Some(index) = session.gates.front().map(|g| g.index) {
                 aim(&mut session, index, 0, 0);
             }
-            session.step_flight(0, 0);
+            session.step_flight(0, 0, session.speed);
             if !matches!(session.phase, Phase::Flying) {
                 break;
             }
@@ -203,13 +203,13 @@ fn all_ring_courses_complete_and_settle_the_shared_completion_reward_once() {
 #[test]
 fn generator_spacing_counts_distance_blocks_and_counter_underflow() {
     let mut session = Session::new(ZoneKind::GateFlight, 0, None, 1);
-    session.step_flight(0, 0);
+    session.step_flight(0, 0, session.speed);
     assert_eq!(session.cursor, 1);
     for _ in 0..215 {
-        session.step_flight(0, 0);
+        session.step_flight(0, 0, session.speed);
     }
     assert_eq!(session.cursor, 1);
-    session.step_flight(0, 0);
+    session.step_flight(0, 0, session.speed);
     assert_eq!(session.cursor, 2);
 }
 

@@ -32,10 +32,7 @@ pub(crate) struct Spiker {
     pub(crate) spike: Option<Entity>,
     pub(crate) build: u16,
     pub(crate) angle: u8,
-    /// Per-tick spike extension, recorded at spawn. The original ties this to
-    /// the Spiker's climb speed, but `--difficulty` scales climb speed, and
-    /// spikes only threaten the glider during the exit flight. Keeping the two
-    /// apart stops a tempo change from silently altering exit lethality.
+    /// Spike extension per enemy tick: the Spiker's climb speed, as in `climbspike`.
     pub(crate) spike_speed: i32,
 }
 
@@ -106,6 +103,7 @@ pub(crate) fn spawn(
     living: Query<(), With<Enemy>>,
     tankers: Query<(), With<tankers::Tanker>>,
     spikers: Query<&Spiker>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Playing || game.remaining == 0 {
         return;
@@ -122,8 +120,7 @@ pub(crate) fn spawn(
         } else {
             &mut game.spiker_timer
         };
-        if *timer > 0 {
-            *timer -= 1;
+        if !crate::difficulty::due(timer, clock.steps()) {
             continue;
         }
         if occupied >= level.flippers.max_active {
@@ -167,6 +164,7 @@ pub(crate) fn advance(
     assets: Res<SpikerAssets>,
     mut spikers: Query<(&mut Spiker, &mut Transform), Without<Spike>>,
     mut spikes: Query<(Entity, &mut Spike)>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Playing {
         return;
@@ -210,7 +208,7 @@ pub(crate) fn advance(
                 spiker.motion = Motion::Climb;
             }
             Motion::Climb => {
-                spiker.depth -= generator.climb_speed;
+                spiker.depth -= clock.scaled(generator.climb_speed);
                 if spiker.depth < 10 * LANE_UNIT {
                     spiker.motion = Motion::Descend;
                 } else if let Some(entity) = spiker.spike
@@ -218,15 +216,16 @@ pub(crate) fn advance(
                 {
                     // climbspike compares integer Z words, not full fixed-point distances.
                     let height = (level.web.rear() - spiker.depth + LANE_UNIT - 1) / LANE_UNIT;
-                    if height > spike.length / LANE_UNIT {
-                        let length = spike.length + spiker.spike_speed;
+                    // Builds count enemy ticks, so spikes reach the same length on every setting.
+                    if height > spike.length / LANE_UNIT && clock.steps() > 0 {
+                        let length = spike.length + clock.scaled(spiker.spike_speed);
                         if length < 150 * LANE_UNIT {
                             spike.length = length;
                         }
                         if spiker.build == 0 {
                             spiker.motion = Motion::Descend;
                         } else {
-                            spiker.build -= 1;
+                            spiker.build = spiker.build.saturating_sub(clock.steps() as u16);
                         }
                     }
                 } else {
@@ -234,7 +233,7 @@ pub(crate) fn advance(
                 }
             }
             Motion::Descend => {
-                spiker.depth += generator.climb_speed;
+                spiker.depth += clock.scaled(generator.climb_speed);
                 if spiker.depth >= level.web.rear() {
                     spiker.depth = level.web.rear();
                     spiker.motion = Motion::Seek;

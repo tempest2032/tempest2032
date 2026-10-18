@@ -309,6 +309,7 @@ mod tests {
     fn both_gate_zones_replace_flight_with_feedback_then_clear_it_on_return() {
         let mut app = App::new();
         app.init_resource::<Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<Assets<Mesh>>()
             .init_resource::<Assets<StandardMaterial>>()
             .init_resource::<Assets<Image>>()

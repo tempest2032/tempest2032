@@ -35,6 +35,7 @@ fn steam_gamepad_output_uses_gameplay_actions_and_menu_confirm_back() {
     let mut app = App::new();
     app.init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<crate::game::Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<Time<Virtual>>()
         .add_systems(Update, map_controllers);
     let mut pad = Gamepad::default();
@@ -69,6 +70,7 @@ fn remapped_buttons_require_release_but_fresh_presses_work_on_pause_and_game_ove
         let mut app = App::new();
         app.init_resource::<ButtonInput<KeyCode>>()
             .init_resource::<crate::game::Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<Time<Virtual>>()
             .add_systems(Update, map_controllers);
         let mut pad = Gamepad::default();

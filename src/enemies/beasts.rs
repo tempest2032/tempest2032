@@ -146,6 +146,7 @@ pub(crate) fn spawn(
     assets: Res<FlipperAssets>,
     living: Query<(), With<Enemy>>,
     tankers: Query<(), With<tankers::Tanker>>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(generator) = &level.beasts else {
         return;
@@ -153,8 +154,7 @@ pub(crate) fn spawn(
     if game.status != Status::Playing || game.remaining == 0 {
         return;
     }
-    if game.beast_timer > 0 {
-        game.beast_timer -= 1;
+    if !crate::difficulty::due(&mut game.beast_timer, clock.steps()) {
         return;
     }
     if crate::enemies::occupancy(&living, &tankers) >= level.flippers.max_active {

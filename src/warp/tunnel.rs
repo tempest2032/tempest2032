@@ -278,7 +278,9 @@ impl Tunnel {
         (score, phase)
     }
 
-    pub(super) fn pixels(&self, tick: u32) -> Vec<(Vec2, Color)> {
+    /// Pixels for this frame; `ahead` fifths of a segment of progress toward the
+    /// next step scroll the rings smoothly when the tempo is not a whole tick.
+    pub(super) fn pixels(&self, tick: u32, ahead: i32) -> Vec<(Vec2, Color)> {
         let mut pixels = Vec::new();
         // donky.gas starplane uses repeatable LFSRs on sixteen scrolling planes.
         for plane in 0..16 {
@@ -301,7 +303,7 @@ impl Tunnel {
             }
         }
         for depth in 0..64 {
-            let z = 550 - depth * 8;
+            let z = 550 - depth * 8 - ahead * 8 / 5;
             let center = self.viewpoint * (512. / z as f32);
             let radius = i32::from(self.radius) * 512 / z;
             for arc in self.arcs[(self.segments as usize + 64 - depth as usize) & 63] {
@@ -364,9 +366,9 @@ mod tests {
             ..default()
         };
         tunnel.trail.push_front(128);
-        let flying = tunnel.pixels(0);
+        let flying = tunnel.pixels(0, 0);
         tunnel.tail = -UNIT;
-        assert_eq!(tunnel.pixels(0), flying[..flying.len() - 5]);
+        assert_eq!(tunnel.pixels(0, 0), flying[..flying.len() - 5]);
         for ticks in (152..=183).rev() {
             tunnel.settle(Phase::Failure(ticks));
         }

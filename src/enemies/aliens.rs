@@ -41,6 +41,64 @@ pub(crate) struct AlienDroid {
 }
 
 impl AlienDroid {
+    /// One enemy tick of the lane crossing and the zap that follows it.
+    fn step(&mut self, web: &Web) {
+        self.angle = self.angle.wrapping_sub(2);
+        match self.motion {
+            Motion::Climb => {}
+            Motion::Ready => {
+                if web.neighbor(self.lane, self.direction).is_none() {
+                    self.direction = -self.direction;
+                }
+                let to = web.neighbor(self.lane, self.direction).unwrap();
+                self.motion = Motion::Cross {
+                    from: self.lane,
+                    to,
+                    step: 0,
+                    delay: 2,
+                };
+            }
+            Motion::Cross {
+                from,
+                to,
+                step,
+                delay,
+            } => {
+                if delay > 0 {
+                    self.motion = Motion::Cross {
+                        from,
+                        to,
+                        step,
+                        delay: delay - 1,
+                    };
+                } else {
+                    let step = step + 1;
+                    if step > 8 {
+                        self.lane = to;
+                    }
+                    self.motion = if step == 16 {
+                        Motion::Zap(32)
+                    } else {
+                        Motion::Cross {
+                            from,
+                            to,
+                            step,
+                            delay: 2,
+                        }
+                    };
+                }
+            }
+            Motion::Zap(ticks) => {
+                self.angle = self.angle.wrapping_add(3);
+                self.motion = if ticks == 1 {
+                    Motion::Ready
+                } else {
+                    Motion::Zap(ticks - 1)
+                };
+            }
+        }
+    }
+
     pub(crate) fn target(&self) -> Option<(usize, i32)> {
         (!self.approach).then_some((self.lane, self.depth))
     }
@@ -167,6 +225,7 @@ pub(crate) fn spawn(
     assets: Res<AlienAssets>,
     living: Query<(), With<Enemy>>,
     tankers: Query<(), With<Tanker>>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(generator) = &level.aliens else {
         return;
@@ -174,8 +233,7 @@ pub(crate) fn spawn(
     if game.status != Status::Playing || game.remaining == 0 {
         return;
     }
-    if game.alien_timer > 0 {
-        game.alien_timer -= 1;
+    if !crate::difficulty::due(&mut game.alien_timer, clock.steps()) {
         return;
     }
     if crate::enemies::occupancy(&living, &tankers) >= level.flippers.max_active {
@@ -225,6 +283,7 @@ pub(crate) fn advance(
         &mut Mesh3d,
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(generator) = &level.aliens else {
         return;
@@ -234,73 +293,24 @@ pub(crate) fn advance(
     }
     for (mut alien, mut pose, mut mesh, mut material) in &mut aliens {
         if alien.approach {
-            alien.depth -= 2 * LANE_UNIT;
+            alien.depth -= clock.scaled(2 * LANE_UNIT);
             if alien.depth <= level.web.rear() {
                 alien.depth = level.web.rear();
                 alien.approach = false;
                 mesh.0 = assets.body.clone();
                 material.0 = assets.material.clone();
             }
+        } else if matches!(alien.motion, Motion::Climb) {
+            alien.angle = alien.angle.wrapping_sub(2 * clock.steps() as u8);
+            alien.depth -= clock.scaled(generator.climb_speed);
+            if alien.depth <= -15 * LANE_UNIT {
+                alien.depth = -15 * LANE_UNIT;
+                alien.motion = Motion::Ready;
+            }
         } else {
-            alien.angle = alien.angle.wrapping_sub(2);
-            match alien.motion {
-                Motion::Climb => {
-                    alien.depth -= generator.climb_speed;
-                    if alien.depth <= -15 * LANE_UNIT {
-                        alien.depth = -15 * LANE_UNIT;
-                        alien.motion = Motion::Ready;
-                    }
-                }
-                Motion::Ready => {
-                    if level.web.neighbor(alien.lane, alien.direction).is_none() {
-                        alien.direction = -alien.direction;
-                    }
-                    let to = level.web.neighbor(alien.lane, alien.direction).unwrap();
-                    alien.motion = Motion::Cross {
-                        from: alien.lane,
-                        to,
-                        step: 0,
-                        delay: 2,
-                    };
-                }
-                Motion::Cross {
-                    from,
-                    to,
-                    step,
-                    delay,
-                } => {
-                    if delay > 0 {
-                        alien.motion = Motion::Cross {
-                            from,
-                            to,
-                            step,
-                            delay: delay - 1,
-                        };
-                    } else {
-                        let step = step + 1;
-                        if step > 8 {
-                            alien.lane = to;
-                        }
-                        alien.motion = if step == 16 {
-                            Motion::Zap(32)
-                        } else {
-                            Motion::Cross {
-                                from,
-                                to,
-                                step,
-                                delay: 2,
-                            }
-                        };
-                    }
-                }
-                Motion::Zap(ticks) => {
-                    alien.angle = alien.angle.wrapping_add(3);
-                    alien.motion = if ticks == 1 {
-                        Motion::Ready
-                    } else {
-                        Motion::Zap(ticks - 1)
-                    };
-                }
+            // Crossing and zapping advance in whole enemy ticks.
+            for _ in 0..clock.steps() {
+                alien.step(&level.web);
             }
         }
         *pose = alien.transform(&level.web);

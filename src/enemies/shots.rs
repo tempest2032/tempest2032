@@ -54,6 +54,7 @@ pub(crate) fn enemy_shot_mesh() -> Mesh {
     colored_mesh(triangles)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub(crate) fn fire_enemy_shots(
     level: Res<Level>,
     mut commands: Commands,
@@ -62,6 +63,7 @@ pub(crate) fn fire_enemy_shots(
     enemies: Query<(&Flipper, &SpawnOrder)>,
     shots: Query<&EnemyShot, (Without<beasts::Reflected>, Without<mirrors::ReturnedShot>)>,
     spikers: Query<(&spikers::Spiker, &SpawnOrder)>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Playing {
         return;
@@ -80,7 +82,7 @@ pub(crate) fn fire_enemy_shots(
         )
         .collect();
     sources.sort_unstable_by_key(|&(order, ..)| std::cmp::Reverse(order));
-    for (_, lane, depth) in sources {
+    for (_, lane, depth) in (0..clock.steps()).flat_map(|_| sources.iter().copied()) {
         if game.fire_timer > 0 {
             game.fire_timer -= 1;
             continue;
@@ -123,13 +125,15 @@ pub(crate) fn move_enemy_shots(
         Option<&beasts::Reflected>,
         Option<&mirrors::ReturnedShot>,
     )>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Playing {
         return;
     }
     for (entity, mut shot, mut transform, reflection, returned) in &mut shots {
-        shot.depth -= returned.map_or_else(|| reflection.map_or(0x18000, |r| r.speed), |r| r.speed);
-        shot.angle = shot.angle.wrapping_add(4);
+        shot.depth -= clock
+            .scaled(returned.map_or_else(|| reflection.map_or(0x18000, |r| r.speed), |r| r.speed));
+        shot.angle = shot.angle.wrapping_add(4 * clock.steps() as u8);
         transform.translation.z = -(shot.depth as f32 / LANE_UNIT as f32) * WORLD_UNIT + 0.06;
         transform.rotation = Quat::from_rotation_z(-(shot.angle as f32) * TAU / 256.0);
         if shot.depth < 0 {

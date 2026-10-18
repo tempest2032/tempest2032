@@ -16,6 +16,7 @@ fn app() -> App {
         )))
         .init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<crate::game::Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<crate::powerups::Upgrades>()
         .init_resource::<Ticks>()
         .add_systems(FixedUpdate, |mut ticks: ResMut<Ticks>| ticks.0 += 1);

@@ -106,6 +106,7 @@ pub(crate) fn pulse(
     game: Res<Game>,
     mut pulse: ResMut<Pulse>,
     pulsars: Query<&Pulsar>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(settings) = level.pulse_settings() else {
         return;
@@ -113,13 +114,15 @@ pub(crate) fn pulse(
     if !matches!(game.status, Status::Entering | Status::Playing) {
         return;
     }
-    pulse.frame = pulse.frame.wrapping_add(1);
-    pulse.ticks += 1;
-    if pulse.ticks >= settings.phase_ticks {
-        pulse.ticks = 0;
-        pulse.phase = (pulse.phase + 1) & 15;
-        if pulse.phase == 7 && pulsars.iter().any(Pulsar::climbing) {
-            crate::sound::play(&mut commands, crate::sound::Effect::Pulse);
+    for _ in 0..clock.steps() {
+        pulse.frame = pulse.frame.wrapping_add(1);
+        pulse.ticks += 1;
+        if pulse.ticks >= settings.phase_ticks {
+            pulse.ticks = 0;
+            pulse.phase = (pulse.phase + 1) & 15;
+            if pulse.phase == 7 && pulsars.iter().any(Pulsar::climbing) {
+                crate::sound::play(&mut commands, crate::sound::Effect::Pulse);
+            }
         }
     }
 }
@@ -131,6 +134,7 @@ pub(crate) fn spawn(
     assets: Res<PulsarAssets>,
     living: Query<(), With<Enemy>>,
     tankers: Query<(), With<Tanker>>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(settings) = &level.pulsars else {
         return;
@@ -138,8 +142,7 @@ pub(crate) fn spawn(
     if game.status != Status::Playing || game.remaining == 0 {
         return;
     }
-    if game.pulsar_timer > 0 {
-        game.pulsar_timer -= 1;
+    if !crate::difficulty::due(&mut game.pulsar_timer, clock.steps()) {
         return;
     }
     if crate::enemies::occupancy(&living, &tankers) >= level.flippers.max_active {
@@ -172,6 +175,7 @@ pub(crate) fn advance(
     assets: Res<PulsarAssets>,
     mut commands: Commands,
     mut pulsars: Query<(&mut Pulsar, &mut Transform)>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(settings) = level.pulse_settings() else {
         return;
@@ -186,7 +190,8 @@ pub(crate) fn advance(
             angle,
         }) = pulsar.flip
         {
-            let angle = angle.saturating_add(level.flippers.flip_speed);
+            let angle =
+                angle.saturating_add(clock.scaled(i32::from(level.flippers.flip_speed)) as u16);
             pulsar.flip = (angle < level.web.flip_angle(from, pulsar.lane, direction)).then_some(
                 Motion::Flip {
                     from,
@@ -202,30 +207,32 @@ pub(crate) fn advance(
             .as_ref()
             .map_or(0x8000, |p| p.generator.climb_speed);
         if pulsar.approach {
-            pulsar.depth -= 2 * LANE_UNIT;
+            pulsar.depth -= clock.scaled(2 * LANE_UNIT);
             if pulsar.depth <= level.web.rear() {
                 pulsar.depth = level.web.rear();
                 // run_objects waits at the rear until the shared pulse is harmless.
                 if pulse.phase < 3 {
                     pulsar.approach = false;
-                    pulsar.depth -= climb_speed;
+                    pulsar.depth -= clock.scaled(climb_speed);
                 }
             }
         } else if let Some(mut spark) = pulsar.spark {
-            spark.ticks -= 1;
-            if spark.ticks == 0 {
-                spark.ticks = settings.propagation_ticks;
-                if level.web.neighbor(pulsar.lane, spark.direction).is_none() {
-                    spark.direction = -spark.direction;
+            for _ in 0..clock.steps() {
+                spark.ticks -= 1;
+                if spark.ticks == 0 {
+                    spark.ticks = settings.propagation_ticks;
+                    if level.web.neighbor(pulsar.lane, spark.direction).is_none() {
+                        spark.direction = -spark.direction;
+                    }
+                    pulsar.lane = level
+                        .web
+                        .neighbor(pulsar.lane, spark.direction)
+                        .unwrap_or(pulsar.lane);
                 }
-                pulsar.lane = level
-                    .web
-                    .neighbor(pulsar.lane, spark.direction)
-                    .unwrap_or(pulsar.lane);
             }
             pulsar.spark = Some(spark);
         } else {
-            pulsar.depth -= climb_speed;
+            pulsar.depth -= clock.scaled(climb_speed);
             if pulsar.depth < 0 {
                 pulsar.depth = 0;
                 pulsar.spark = Some(Spark {

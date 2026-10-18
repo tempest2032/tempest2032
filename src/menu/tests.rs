@@ -5,6 +5,7 @@ fn app(eligible: bool) -> (App, tempfile::TempDir) {
     let mut app = App::new();
     app.init_resource::<ButtonInput<KeyCode>>()
         .init_resource::<Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<crate::messages::Messages>()
         .init_resource::<Difficulty>()
         .init_resource::<Levels>()
@@ -520,7 +521,7 @@ fn menus_do_not_compound_difficulty_and_consume_transition_keys() {
             .pressed(KeyCode::Enter)
     );
     let mut expected = crate::level::Level::default();
-    expected.scale_difficulty(Difficulty::Easy.scale());
+    expected.apply_difficulty(Difficulty::Easy);
     assert!(app.world().resource::<Levels>().0[0] == expected);
     app.world_mut().resource_mut::<FrontEnd>().screen = Screen::Welcome;
     key(&mut app, KeyCode::Enter);

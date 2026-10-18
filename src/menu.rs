@@ -345,7 +345,7 @@ pub(crate) fn input(
                 } else if confirm(&keys) {
                     levels.0 = front.originals.clone();
                     for level in &mut levels.0 {
-                        level.scale_difficulty(difficulty.scale());
+                        level.apply_difficulty(*difficulty);
                     }
                     let initials = front
                         .selected_key(&store.data, *difficulty)

@@ -102,7 +102,8 @@ frame. Simulation runs at 60 Hz without render interpolation.
 On Linux, the build needs a C/C++ toolchain and X11 and Wayland development
 libraries. On Debian or Ubuntu, install `build-essential`, `pkg-config`,
 `libx11-dev`, `libxi-dev`, `libxrandr-dev`, `libxcursor-dev`,
-`libxkbcommon-dev`, `libwayland-dev`, `libudev-dev`, and `libasound2-dev`. Running needs a
+`libxkbcommon-dev`, `libxkbcommon-x11-0`, `libwayland-dev`, `libudev-dev`, and
+`libasound2-dev`. Running needs a
 graphical desktop and a Vulkan-capable graphics driver. Windows and macOS use
 their native window backends.
 
@@ -1316,35 +1317,45 @@ fill and its static depth shading.
 
 ### Difficulty
 
-`--difficulty easy|normal|hard` (the former `low` and `high` remain accepted) scales enemy tempo and player pressure at
-runtime. The welcome screen's configuration menu selects the same settings.
-The parsed, unscaled catalog is retained, and each new run builds its active
-catalog from those originals. Switching difficulty never compounds scaling or
-edits TOML files. `normal` leaves the configured values unchanged. The saved
-menu selection is used on subsequent launches; an explicit `--difficulty`
-overrides it for that launch without changing the saved choice.
+`--difficulty easy|normal|hard` (the former `low` and `high` remain accepted)
+selects how fast and how crowded the enemies are. The welcome screen's
+configuration menu selects the same settings. The saved menu selection is used on
+subsequent launches; an explicit `--difficulty` overrides it for that launch
+without changing the saved choice. `normal` is the original game, tick for tick.
 
-| Setting | Player bullet speed | Alien shot budget | Enemy climb speed | Spawn interval |
-| --- | --- | --- | --- | --- |
-| `easy` | ×1.25 | ×0.5 | ×0.85 | ×1.3 |
-| `normal` | ×1 | ×1 | ×1 | ×1 |
-| `hard` | ×0.85 | ×2.5 | ×1.2 | ×0.8 |
+Difficulty changes threat only. Every setting keeps the same enemy budget,
+power-up drops and reward order, points, extra lives, warp tokens, superzapper,
+and starting lives, and the player's movement, firing, and bullets never change,
+so skill and progression carry over between settings.
+
+| Setting | Enemy and warp tempo | Simultaneous enemy shots | Enemies at once |
+| --- | --- | --- | --- |
+| `easy` | ×0.8 | one fewer, at least one | `max_active` − 2 |
+| `normal` | ×1 | the level's `ashots` budget | `max_active` |
+| `hard` | ×1.2 | one more, at most Beastly's eight | `max_active` + 2 |
 
 ```sh
 cargo run --release -- --level 3 --difficulty hard
 ```
 
-The alien shot budget is `level.enemy_shots`, which the parser keeps within
-1 to 16. Scaled intervals are floored at one tick so they stay legal. Two
-source-accurate behaviours are deliberately left alone: `pulsars.rs` falls back
-to a fixed climb speed when a level configures no Pulsars, and Super Flippers
-still flip at double rate on every setting.
+The tempo is an enemy clock counting fifths of a 60 Hz tick (`difficulty.rs`).
+Each simulation tick advances it by four, five, or six fifths. Movement uses the
+clock's exact share of each per-tick step, so climbing, approaching, flipping,
+enemy and reflected shots, and warp travel stay smooth. Countdowns run once per
+whole enemy tick: Flipper pauses, spawn timers and first spawns, the shared
+112-tick fire timer, Pulsar pulse phases and sparks, Fuseball rail waits and
+crossings, Alien crossings and zaps, and Spike builds. Every timing therefore
+keeps its original relationship to the others: a Pulsar electrifies as often per
+climb, an enemy fires as often per climb, and a Spike reaches the same length.
+Knock-back still uses the unscaled climb speed, so Aliens and Mirrors take the
+same number of hits to destroy on every setting.
 
-Spike growth is not scaled with climb speed. The original ties a Spike's
-per-tick extension to its Spiker's climb speed, but Spikes only threaten the
-claw during the exit flight, so coupling them would let a tempo change silently
-alter exit lethality. Each Spiker records its own extension rate at spawn
-instead.
+Warp zones use the same tempo. Gate flight and the psychedelic rings travel
+forward at the scaled speed while steering keeps its original rates, so gates
+arrive a fifth slower or faster. The tunnel advances whole track segments, with
+its roll, on the enemy clock and draws its rings between segments so that the
+scroll stays smooth. Warp presentation timers, such as the melts and the victory
+screen, keep their original lengths.
 
 ### Beastly mode
 
@@ -1357,17 +1368,17 @@ bit persists in cartridge RAM, so from then on the level selection screen draws
 screen sets the runtime `beastly` flag (`yak.s:1817-1826`). Head-to-head is
 excluded, and any ordinary button clears it.
 
-It is not a point on the `--difficulty` scale. The two overlap on player bullet
-speed but disagree on magnitude, and Beastly leaves enemy density alone
-entirely:
+It is not a point on the `--difficulty` scale. Beastly weakens the player and
+removes Flipper pauses, while `--difficulty` only changes enemy tempo and
+crowding:
 
 | Knob | Beastly | `--difficulty hard` |
 | --- | --- | --- |
-| Player bullet speed | ×0.50 (`$38000` halved) | ×0.85 |
-| Alien shot budget | absolute 7, not a multiplier | ×2.5 |
-| Enemy climb speed | unchanged | ×1.2 |
-| Spawn interval | unchanged | ×0.8 |
-| Flipper pause | never pauses | unchanged |
+| Player bullet speed | ×0.50 (`$38000` halved) | unchanged |
+| Alien shot budget | absolute 7, not a multiplier | one more, at most 8 |
+| Enemy tempo | unchanged | ×1.2 for every enemy timing |
+| Enemies at once | unchanged | `max_active` + 2 |
+| Flipper pause | never pauses | shorter in real time, same in enemy ticks |
 
 Two corrections worth recording, since both are easy to get backwards.
 `shotspeed` is read in `player_shot` (`yak.s:10215`), so halving it slows the

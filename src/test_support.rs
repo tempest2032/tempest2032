@@ -98,6 +98,7 @@ pub(crate) fn pickup(depth: i32) -> powerups::pickups::PowerUp {
 pub(crate) fn app() -> App {
     let mut app = App::new();
     app.init_resource::<Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<Level>()
         .init_resource::<Levels>()
         .init_resource::<crate::difficulty::Difficulty>()

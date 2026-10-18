@@ -21,6 +21,7 @@ use crate::weapons::Weapon;
 use crate::web::FRONT_RADIUS;
 use crate::web::LANE_UNIT;
 use crate::web::WORLD_UNIT;
+use crate::web::Web;
 use bevy::camera::visibility::RenderLayers;
 use bevy::prelude::*;
 use std::collections::HashSet;
@@ -50,6 +51,76 @@ pub(crate) struct Fuseball {
 }
 
 impl Fuseball {
+    /// One enemy tick of the rail wait and the sixteen-step lane crossing.
+    fn step(&mut self, web: &Web, player_lane: usize) {
+        match self.motion {
+            Motion::Approach => {}
+            Motion::Rail => {
+                if self.rise > 0 {
+                    self.rise -= 1;
+                    return;
+                }
+                self.rise = 48;
+                let reference = if web.closed {
+                    (self.edge + web.lanes() - 1) % web.lanes()
+                } else {
+                    self.edge.saturating_sub(1)
+                };
+                let delta =
+                    web.lane_delta(reference as i32 * LANE_UNIT, player_lane as i32 * LANE_UNIT);
+                let mut direction = if delta > 0 { 1 } else { -1 };
+                let edge_count = if web.closed {
+                    web.lanes()
+                } else {
+                    web.lanes() + 1
+                };
+                if !web.closed
+                    && ((direction < 0 && self.edge == 0)
+                        || (direction > 0 && self.edge == web.lanes()))
+                {
+                    direction = -direction;
+                }
+                let to = (self.edge as i32 + direction).rem_euclid(edge_count as i32) as usize;
+                let lane = if direction > 0 { self.edge } else { to };
+                self.motion = Motion::Cross {
+                    from: self.edge,
+                    to,
+                    lane,
+                    steps: 0,
+                    delay: 4,
+                };
+            }
+            Motion::Cross {
+                from,
+                to,
+                lane,
+                steps,
+                delay,
+            } => {
+                self.motion = if delay > 0 {
+                    Motion::Cross {
+                        from,
+                        to,
+                        lane,
+                        steps,
+                        delay: delay - 1,
+                    }
+                } else if steps == 15 {
+                    self.edge = to;
+                    Motion::Rail
+                } else {
+                    Motion::Cross {
+                        from,
+                        to,
+                        lane,
+                        steps: steps + 1,
+                        delay: 4,
+                    }
+                };
+            }
+        }
+    }
+
     pub(crate) fn target(&self) -> Option<(usize, i32)> {
         match self.motion {
             Motion::Cross {
@@ -140,6 +211,7 @@ pub(crate) fn spawn(
     assets: Res<FuseAssets>,
     living: Query<(), With<Enemy>>,
     tankers: Query<(), With<tankers::Tanker>>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(g) = &level.fuseballs else {
         return;
@@ -147,8 +219,7 @@ pub(crate) fn spawn(
     if game.status != Status::Playing || game.remaining == 0 {
         return;
     }
-    if game.fuse_timer > 0 {
-        game.fuse_timer -= 1;
+    if !crate::difficulty::due(&mut game.fuse_timer, clock.steps()) {
         return;
     }
     if crate::enemies::occupancy(&living, &tankers) >= level.flippers.max_active {
@@ -203,6 +274,7 @@ pub(crate) fn advance(
         ),
         (Without<Glider>, Without<Bullet>),
     >,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Playing {
         return;
@@ -245,83 +317,24 @@ pub(crate) fn advance(
             upgrades.lose_life();
             return;
         }
-        fuse.tick = fuse.tick.wrapping_add(1);
+        fuse.tick = fuse.tick.wrapping_add(clock.steps() as u16);
+        let approaching = matches!(fuse.motion, Motion::Approach);
         match fuse.motion {
             Motion::Approach => {
-                fuse.depth -= 2 * LANE_UNIT;
+                fuse.depth -= clock.scaled(2 * LANE_UNIT);
                 if fuse.depth <= level.web.rear() {
                     fuse.depth = level.web.rear();
                     fuse.motion = Motion::Rail;
                     material.0 = assets.material.clone();
                 }
             }
-            Motion::Rail => {
-                if fuse.depth >= 0 {
-                    fuse.depth -= g.climb_speed;
-                }
-                if fuse.rise > 0 {
-                    fuse.rise -= 1;
-                } else {
-                    fuse.rise = 48;
-                    let reference = if level.web.closed {
-                        (fuse.edge + level.web.lanes() - 1) % level.web.lanes()
-                    } else {
-                        fuse.edge.saturating_sub(1)
-                    };
-                    let delta = level
-                        .web
-                        .lane_delta(reference as i32 * LANE_UNIT, player_lane as i32 * LANE_UNIT);
-                    let mut direction = if delta > 0 { 1 } else { -1 };
-                    let edge_count = if level.web.closed {
-                        level.web.lanes()
-                    } else {
-                        level.web.lanes() + 1
-                    };
-                    if !level.web.closed
-                        && ((direction < 0 && fuse.edge == 0)
-                            || (direction > 0 && fuse.edge == level.web.lanes()))
-                    {
-                        direction = -direction;
-                    }
-                    let to = (fuse.edge as i32 + direction).rem_euclid(edge_count as i32) as usize;
-                    let lane = if direction > 0 { fuse.edge } else { to };
-                    fuse.motion = Motion::Cross {
-                        from: fuse.edge,
-                        to,
-                        lane,
-                        steps: 0,
-                        delay: 4,
-                    };
-                }
-            }
-            Motion::Cross {
-                from,
-                to,
-                lane,
-                steps,
-                delay,
-            } => {
-                if delay > 0 {
-                    fuse.motion = Motion::Cross {
-                        from,
-                        to,
-                        lane,
-                        steps,
-                        delay: delay - 1,
-                    };
-                } else if steps == 15 {
-                    fuse.edge = to;
-                    fuse.motion = Motion::Rail;
-                } else {
-                    fuse.motion = Motion::Cross {
-                        from,
-                        to,
-                        lane,
-                        steps: steps + 1,
-                        delay: 4,
-                    };
-                }
-            }
+            Motion::Rail if fuse.depth >= 0 => fuse.depth -= clock.scaled(g.climb_speed),
+            _ => {}
+        }
+        // The rail wait and lane crossing advance in whole enemy ticks, from the next tick
+        // after the approach ends.
+        for _ in 0..if approaching { 0 } else { clock.steps() } {
+            fuse.step(&level.web, player_lane);
         }
         let z = -fuse.depth as f32 / LANE_UNIT as f32 * WORLD_UNIT + 0.06;
         *pose = Transform::from_translation(match fuse.motion {

@@ -32,6 +32,7 @@ fn droid_seeks_the_closest_enemy_and_fires_every_six_ticks() {
         ..default()
     })
     .init_resource::<Game>()
+    .init_resource::<crate::difficulty::EnemyClock>()
     .init_resource::<Level>()
     .init_resource::<Upgrades>()
     .init_resource::<PowerAssets>()

@@ -321,6 +321,7 @@ mod tests {
     fn tunnel_success_waits_for_the_final_fade_before_capturing() {
         let mut app = App::new();
         app.init_resource::<Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<Assets<Image>>()
             .add_systems(
                 Startup,
@@ -356,6 +357,7 @@ mod tests {
     fn tunnel_failure_captures_after_collapse_and_melts_before_returning() {
         let mut app = App::new();
         app.init_resource::<Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<Assets<Image>>()
             .add_systems(
                 Startup,
@@ -426,6 +428,7 @@ mod tests {
     fn failure_captures_once_displays_feedback_and_discards_late_captures_on_return() {
         let mut app = App::new();
         app.init_resource::<Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<Assets<Image>>()
             .add_systems(
                 Startup,

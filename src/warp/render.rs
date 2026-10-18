@@ -507,6 +507,7 @@ pub(crate) fn draw(
     mut crosshairs: Query<&mut Visibility, (With<Crosshair>, Without<Text>, Without<WarpNode>)>,
     mut windows: Query<&mut Window, With<bevy::window::PrimaryWindow>>,
     mut screen_aspect: Local<f32>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let bonus = game.status == Status::Bonus;
     let session = game.bonus.as_ref().filter(|_| bonus);
@@ -651,7 +652,7 @@ pub(crate) fn draw(
                     } else {
                         session.tick
                     };
-                    *mesh = pixel_mesh(&tunnel.pixels(tick), 1.2);
+                    *mesh = pixel_mesh(&tunnel.pixels(tick, clock.fifths_ahead()), 1.2);
                 }
                 session.tunnel.is_some()
             }
@@ -736,6 +737,7 @@ mod tests {
             .init_resource::<Assets<StandardMaterial>>()
             .init_resource::<Assets<Image>>()
             .init_resource::<Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .add_systems(Startup, setup)
             .add_systems(Update, draw);
         let mut game = app.world_mut().resource_mut::<Game>();
@@ -793,7 +795,7 @@ mod tests {
             for _ in 0..450 {
                 let before = gate_views(&session);
                 let speed = session.speed;
-                session.step_flight(0, 0);
+                session.step_flight(0, 0, speed);
                 for gate in &session.gates {
                     let preview = before
                         .iter()
@@ -813,6 +815,7 @@ mod tests {
             .init_resource::<Assets<StandardMaterial>>()
             .init_resource::<Assets<Image>>()
             .init_resource::<Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<Level>()
             .add_systems(Startup, setup)
             .add_systems(Update, draw);
@@ -892,6 +895,7 @@ mod tests {
             .init_resource::<Assets<StandardMaterial>>()
             .init_resource::<Assets<Image>>()
             .init_resource::<Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .add_systems(Startup, setup)
             .add_systems(Update, draw);
         let camera = app
@@ -1046,6 +1050,7 @@ mod tests {
             .init_resource::<Assets<StandardMaterial>>()
             .init_resource::<Assets<Image>>()
             .init_resource::<Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<Level>()
             .add_systems(Startup, setup)
             .add_systems(Update, draw);

@@ -189,7 +189,7 @@ pub(crate) fn run(args: cli::Cli) {
             std::process::exit(1);
         }
     };
-    // Scale the parsed catalog, never the TOML, so the shipped source values
+    // Adjust the parsed catalog, never the TOML, so the shipped source values
     // stay intact and every later level swap inherits the chosen difficulty.
     let eligible = !direct && levels.is_standard();
     let mut front = crate::menu::FrontEnd::new(
@@ -218,9 +218,8 @@ pub(crate) fn run(args: cli::Cli) {
         _ => {}
     }
     app.insert_resource(front).insert_resource(store);
-    let scale = difficulty.scale();
     for level in &mut levels.0 {
-        level.scale_difficulty(scale);
+        level.apply_difficulty(difficulty);
     }
     app.insert_resource(difficulty);
     let initial = levels
@@ -341,6 +340,7 @@ fn add_systems(app: &mut App) {
         .insert_resource(game)
         .init_resource::<powerups::Upgrades>()
         .init_resource::<pulsars::Pulse>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .add_systems(
             PreUpdate,
             (powerups::queue_jump, powerups::superzapper::queue)
@@ -353,6 +353,7 @@ fn add_systems(app: &mut App) {
             FixedUpdate,
             (
                 (
+                    crate::difficulty::advance_enemy_clock,
                     move_glider.run_if(controlling),
                     powerups::update_jump,
                     animate_glider,

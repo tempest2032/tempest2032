@@ -219,12 +219,10 @@ pub(crate) fn fire_bullets(
 
 pub(crate) fn move_bullets(
     level: Res<Level>,
-    difficulty: Res<crate::difficulty::Difficulty>,
     mut commands: Commands,
     mut bullets: Query<(Entity, &Bullet, &mut Transform)>,
     upgrades: Option<Res<Upgrades>>,
 ) {
-    let bullet_speed = difficulty.scale().bullet_speed;
     for (entity, bullet, mut transform) in &mut bullets {
         let center = level
             .web
@@ -236,7 +234,7 @@ pub(crate) fn move_bullets(
             4.5 * FRONT_RADIUS / 24.0
         } else {
             BULLET_STEP
-        } * bullet_speed;
+        };
         if transform.translation.z <= -level.web.world_depth() {
             commands.entity(entity).despawn();
         }

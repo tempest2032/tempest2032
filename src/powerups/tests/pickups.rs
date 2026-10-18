@@ -283,6 +283,7 @@ fn the_spinning_exit_claw_cannot_collect_pickups() {
 fn collection_grants_one_reward_and_the_burst_expires() {
     let mut app = App::new();
     app.init_resource::<Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<Level>()
         .init_resource::<tankers::TankerAssets>()
         .init_resource::<FlipperAssets>()

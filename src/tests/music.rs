@@ -5,6 +5,7 @@ use super::*;
 fn app() -> App {
     let mut app = App::new();
     app.init_resource::<Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<Level>()
         .init_resource::<Time>()
         .init_resource::<MusicVolume>()

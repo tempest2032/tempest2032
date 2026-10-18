@@ -77,6 +77,7 @@ fn app(lives: u16) -> App {
     .insert_resource(materials)
     .init_resource::<ButtonInput<KeyCode>>()
     .init_resource::<powerups::Upgrades>()
+    .init_resource::<crate::difficulty::EnemyClock>()
     .init_resource::<ShotAssets>()
     .init_resource::<explosion::BurstAssets>()
     .add_systems(

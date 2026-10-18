@@ -188,6 +188,7 @@ pub(crate) fn spawn(
     assets: Res<TankerAssets>,
     living: Query<(), With<Enemy>>,
     tankers: Query<(), With<Tanker>>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Playing || game.remaining == 0 {
         return;
@@ -210,8 +211,7 @@ pub(crate) fn spawn(
             Contents::Fuseballs => &mut game.fuse_tanker_timer,
             Contents::Pulsars => &mut game.pulsar_tanker_timer,
         };
-        if *timer > 0 {
-            *timer -= 1;
+        if !crate::difficulty::due(timer, clock.steps()) {
             continue;
         }
         if occupied >= level.flippers.max_active {
@@ -370,6 +370,7 @@ pub(crate) fn move_tankers(
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
     mut frame: Local<u8>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Playing {
         return;
@@ -384,7 +385,7 @@ pub(crate) fn move_tankers(
             continue;
         };
         if tanker.approach {
-            tanker.depth -= 2 * LANE_UNIT;
+            tanker.depth -= clock.scaled(2 * LANE_UNIT);
             if tanker.depth <= level.web.rear() {
                 tanker.depth = level.web.rear();
                 tanker.approach = false;
@@ -396,7 +397,7 @@ pub(crate) fn move_tankers(
                 material.0 = shells.material.clone();
             }
         } else {
-            tanker.depth = (tanker.depth - generator.climb_speed).max(0);
+            tanker.depth = (tanker.depth - clock.scaled(generator.climb_speed)).max(0);
         }
         *pose = transform(&tanker, &level.web);
         if !tanker.approach && *contents == Contents::Flippers {

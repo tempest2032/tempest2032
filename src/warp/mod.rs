@@ -257,14 +257,16 @@ impl Session {
         self.announcements.push(id.into());
         Some(score)
     }
-    fn step_flight(&mut self, horizontal: i32, vertical: i32) -> u32 {
+    /// Steers at the original rates and moves forward by `travel`, the session
+    /// speed at the difficulty's tempo.
+    fn step_flight(&mut self, horizontal: i32, vertical: i32, travel: i32) -> u32 {
         self.x
             .step(horizontal, 0x1000, 0x800, 0x20000, 0, 320 * UNIT);
         self.y
             .step(vertical, 0x8000, 0x2000, 0x80000, -320 * UNIT, 320 * UNIT);
-        self.distance += i64::from(self.speed);
+        self.distance += i64::from(travel);
         for gate in &mut self.gates {
-            gate.distance -= self.speed;
+            gate.distance -= travel;
             gate.age = gate.age.wrapping_add(1);
         }
         let mut points = 0;
@@ -277,7 +279,7 @@ impl Session {
                 return points;
             }
         }
-        self.generation_distance -= self.speed;
+        self.generation_distance -= travel;
         if self.generation_distance < 0 {
             self.generation_distance += 12 * UNIT;
             self.generation_wait -= 1;
@@ -304,6 +306,7 @@ pub(crate) fn advance(
     keys: Res<ButtonInput<KeyCode>>,
     levels: Res<Levels>,
     mut game: ResMut<Game>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Bonus || game.load.is_some() {
         return;
@@ -324,13 +327,18 @@ pub(crate) fn advance(
             let vertical = i32::from(keys.any_pressed([KeyCode::ArrowDown, KeyCode::KeyS]))
                 - i32::from(keys.any_pressed([KeyCode::ArrowUp, KeyCode::KeyW]));
             if let Some(tunnel) = &mut session.tunnel {
-                let (score, phase) = tunnel.step(horizontal, session.course);
-                game.add_score(score);
-                if let Some(phase) = phase {
-                    session.phase = phase;
+                // The track advances a whole segment per step, with the roll inside it.
+                for _ in 0..clock.steps() {
+                    let (score, phase) = tunnel.step(horizontal, session.course);
+                    game.add_score(score);
+                    if let Some(phase) = phase {
+                        session.phase = phase;
+                        break;
+                    }
                 }
             } else {
-                game.add_score(session.step_flight(horizontal, vertical));
+                let travel = clock.scaled(session.speed);
+                game.add_score(session.step_flight(horizontal, vertical, travel));
             }
         }
         Phase::Victory(1) => {

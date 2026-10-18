@@ -71,6 +71,7 @@ fn web_loading_changes_the_pattern_preserves_motion_and_restart_resets_phase() {
         .init_resource::<Animation>()
         .init_resource::<Level>()
         .init_resource::<Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .add_systems(Update, advance_stars);
     for _ in 0..3 {
         app.update();
@@ -106,6 +107,7 @@ fn entry_replays_exit_speed_and_warp_streaks_in_reverse_on_every_web() {
         .init_resource::<Animation>()
         .init_resource::<Level>()
         .init_resource::<Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .add_systems(Update, advance_stars);
     for level in [1, 2, 32] {
         app.world_mut().resource_mut::<Level>().number = level;

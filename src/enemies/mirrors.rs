@@ -127,6 +127,7 @@ pub(crate) fn spawn(
     assets: Res<MirrorAssets>,
     living: Query<(), With<Enemy>>,
     tankers: Query<(), With<Tanker>>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(generator) = &level.mirrors else {
         return;
@@ -134,8 +135,7 @@ pub(crate) fn spawn(
     if game.status != Status::Playing || game.remaining == 0 {
         return;
     }
-    if game.mirror_timer > 0 {
-        game.mirror_timer -= 1;
+    if !crate::difficulty::due(&mut game.mirror_timer, clock.steps()) {
         return;
     }
     if crate::enemies::occupancy(&living, &tankers) >= level.flippers.max_active {
@@ -170,6 +170,7 @@ pub(crate) fn advance(
         &mut Mesh3d,
         &mut MeshMaterial3d<StandardMaterial>,
     )>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     let Some(generator) = &level.mirrors else {
         return;
@@ -178,9 +179,9 @@ pub(crate) fn advance(
         return;
     }
     for (mut mirror, mut pose, mut mesh, mut material) in &mut mirrors {
-        mirror.angle = mirror.angle.wrapping_add(1);
+        mirror.angle = mirror.angle.wrapping_add(clock.steps() as u8);
         if mirror.approach {
-            mirror.depth -= 2 * LANE_UNIT;
+            mirror.depth -= clock.scaled(2 * LANE_UNIT);
             if mirror.depth <= level.web.rear() {
                 mirror.depth = level.web.rear();
                 mirror.approach = false;
@@ -188,7 +189,7 @@ pub(crate) fn advance(
                 material.0 = assets.material.clone();
             }
         } else {
-            mirror.depth = (mirror.depth - generator.climb_speed).max(40 * LANE_UNIT);
+            mirror.depth = (mirror.depth - clock.scaled(generator.climb_speed)).max(40 * LANE_UNIT);
         }
         *pose = mirror.transform(&level.web);
     }

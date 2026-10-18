@@ -1,8 +1,11 @@
-//! A graded difficulty scale layered over level definitions.
+//! Difficulty as an enemy tempo, plus how crowded a wave may get.
 //!
-//! These multipliers never touch `levels/*.toml`. They are applied once to the
-//! parsed catalog so the shipped source values stay intact, and `normal` uses
-//! the configured values unchanged.
+//! The levels, the player, and the reward economy never change: every setting
+//! keeps the same enemy budget, drops, points, lives, and player mechanics.
+//! `Easy` and `Hard` run every enemy and warp-zone timing at a fifth slower or
+//! faster through [`EnemyClock`], so the original relationships between those
+//! timings hold, and allow one fewer or one more simultaneous enemy shot and
+//! two fewer or more enemies at once. `Normal` is the original, unchanged.
 //!
 //! This is deliberately not Beastly mode. The original's Beastly mode is a
 //! separate, harsher mode: it halves the *player's* bullet speed, forces an
@@ -12,26 +15,62 @@
 use bevy::prelude::*;
 use clap::ValueEnum;
 
-/// The multipliers applied to a level. `Normal` is the identity.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) struct Scale {
-    /// Multiplies the player's bullet step.
-    pub(crate) bullet_speed: f32,
-    /// Multiplies the maximum simultaneous alien shot budget.
-    pub(crate) alien_shots: f32,
-    /// Multiplies every enemy climb speed.
-    pub(crate) climb_speed: f32,
-    /// Multiplies every enemy spawn interval.
-    pub(crate) spawn_interval: f32,
+/// Enemy time in fifths of a simulation tick. Integer arithmetic keeps every
+/// setting deterministic and makes `Normal` the original tick for tick.
+#[derive(Resource, Clone, Copy, Debug)]
+pub(crate) struct EnemyClock {
+    tempo: u64,
+    before: u64,
+    after: u64,
 }
 
-impl Scale {
-    const IDENTITY: Self = Self {
-        bullet_speed: 1.,
-        alien_shots: 1.,
-        climb_speed: 1.,
-        spawn_interval: 1.,
-    };
+impl Default for EnemyClock {
+    /// One `Normal` tick, so systems run unchanged without the clock system.
+    fn default() -> Self {
+        Self {
+            tempo: 5,
+            before: 0,
+            after: 5,
+        }
+    }
+}
+
+impl EnemyClock {
+    /// Enemy ticks elapsed during this simulation tick: zero, one, or two.
+    pub(crate) fn steps(&self) -> u32 {
+        self.scaled(1) as u32
+    }
+
+    /// Progress toward the next enemy tick, from 0 to 4 fifths. Always 0 on `Normal`.
+    pub(crate) fn fifths_ahead(&self) -> i32 {
+        (self.after % 5) as i32
+    }
+
+    /// This tick's share of `amount` per enemy tick, spread so that the total
+    /// over time is exact. Speeds stay smooth instead of skipping ticks.
+    pub(crate) fn scaled(&self, amount: i32) -> i32 {
+        let at = |fifths: u64| (fifths as i64 * i64::from(amount)).div_euclid(5);
+        (at(self.after) - at(self.before)) as i32
+    }
+}
+
+/// Advances enemy time by one simulation tick at the selected tempo.
+pub(crate) fn advance_enemy_clock(difficulty: Res<Difficulty>, mut clock: ResMut<EnemyClock>) {
+    clock.tempo = difficulty.tempo_fifths();
+    clock.before = clock.after;
+    clock.after += clock.tempo;
+}
+
+/// Counts a timer down by this tick's enemy steps, original-style: a timer at
+/// zero is due, and the caller reloads it.
+pub(crate) fn due(timer: &mut u16, steps: u32) -> bool {
+    for _ in 0..steps {
+        if *timer == 0 {
+            return true;
+        }
+        *timer -= 1;
+    }
+    false
 }
 
 #[derive(
@@ -48,14 +87,14 @@ impl Scale {
 )]
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Difficulty {
-    /// Faster player bullets, fewer alien shots, slower and rarer enemies.
+    /// Enemies and warp zones at four-fifths tempo, with fewer at once and one shot fewer.
     #[serde(alias = "low")]
     #[value(alias = "low")]
     Easy,
     #[default]
-    /// The original source values, unchanged.
+    /// The original game, unchanged.
     Normal,
-    /// Slower player bullets, more alien shots, faster and denser enemies.
+    /// Enemies and warp zones at six-fifths tempo, with more at once and one shot more.
     #[serde(alias = "high")]
     #[value(alias = "high")]
     Hard,
@@ -76,45 +115,92 @@ impl Difficulty {
         }
     }
 
-    pub(crate) fn scale(self) -> Scale {
+    fn tempo_fifths(self) -> u64 {
         match self {
-            Self::Normal => Scale::IDENTITY,
-            Self::Easy => Scale {
-                bullet_speed: 1.25,
-                alien_shots: 0.5,
-                climb_speed: 0.85,
-                spawn_interval: 1.3,
-            },
-            Self::Hard => Scale {
-                bullet_speed: 0.85,
-                alien_shots: 2.5,
-                climb_speed: 1.2,
-                spawn_interval: 0.8,
-            },
+            Self::Easy => 4,
+            Self::Normal => 5,
+            Self::Hard => 6,
+        }
+    }
+
+    /// Simultaneous enemy shots, from the level's original `ashots` budget.
+    /// Hard stops at Beastly's eight.
+    pub(crate) fn enemy_shots(self, original: usize) -> usize {
+        match self {
+            Self::Easy => original.saturating_sub(1).max(1),
+            Self::Normal => original,
+            Self::Hard => (original + 1).min(original.max(8)),
+        }
+    }
+
+    /// Enemies that may be on the web at once, from the level's `max_active`.
+    pub(crate) fn max_active(self, original: usize) -> usize {
+        match self {
+            Self::Easy => original.saturating_sub(2).max(1),
+            Self::Normal => original,
+            Self::Hard => original + 2,
         }
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::Difficulty;
+    use super::*;
 
-    #[test]
-    fn normal_leaves_every_multiplier_at_one() {
-        let scale = Difficulty::Normal.scale();
-        assert_eq!(scale.bullet_speed, 1.);
-        assert_eq!(scale.alien_shots, 1.);
-        assert_eq!(scale.climb_speed, 1.);
-        assert_eq!(scale.spawn_interval, 1.);
+    fn run(tempo: Difficulty, ticks: usize, amount: i32) -> (u32, i32) {
+        let mut app = App::new();
+        app.insert_resource(tempo)
+            .init_resource::<EnemyClock>()
+            .add_systems(Update, advance_enemy_clock);
+        let (mut steps, mut total) = (0, 0);
+        for _ in 0..ticks {
+            app.update();
+            let clock = app.world().resource::<EnemyClock>();
+            steps += clock.steps();
+            total += clock.scaled(amount);
+        }
+        (steps, total)
     }
 
     #[test]
-    fn low_is_uniformly_more_permissive_than_high() {
-        let low = Difficulty::Easy.scale();
-        let high = Difficulty::Hard.scale();
-        assert!(low.bullet_speed > high.bullet_speed);
-        assert!(low.alien_shots < high.alien_shots);
-        assert!(low.climb_speed < high.climb_speed);
-        assert!(low.spawn_interval > high.spawn_interval);
+    fn normal_is_one_enemy_tick_per_simulation_tick() {
+        let clock = EnemyClock::default();
+        assert_eq!((clock.steps(), clock.scaled(0x8000)), (1, 0x8000));
+        assert_eq!(run(Difficulty::Normal, 60, 0x8000), (60, 60 * 0x8000));
+    }
+
+    #[test]
+    fn easy_and_hard_spread_a_fifth_less_or_more_enemy_time_exactly() {
+        assert_eq!(run(Difficulty::Easy, 60, 0x8000), (48, 48 * 0x8000));
+        assert_eq!(run(Difficulty::Hard, 60, 0x8000), (72, 72 * 0x8000));
+        assert_eq!(run(Difficulty::Easy, 5, 4), (4, 16));
+    }
+
+    #[test]
+    fn timers_fire_after_the_same_enemy_ticks_on_every_setting() {
+        let mut timer = 2;
+        assert!(!due(&mut timer, 1));
+        assert!(!due(&mut timer, 1));
+        assert!(due(&mut timer, 1));
+        let mut timer = 1;
+        assert!(!due(&mut timer, 0));
+        assert!(due(&mut timer, 2));
+    }
+
+    #[test]
+    fn pressure_moves_by_one_shot_and_two_enemies_within_beastly_limits() {
+        assert_eq!(Difficulty::Easy.enemy_shots(1), 1);
+        assert_eq!(Difficulty::Easy.enemy_shots(4), 3);
+        assert_eq!(Difficulty::Hard.enemy_shots(4), 5);
+        assert_eq!(Difficulty::Hard.enemy_shots(8), 8);
+        assert_eq!(Difficulty::Easy.max_active(11), 9);
+        assert_eq!(Difficulty::Hard.max_active(11), 13);
+        for setting in Difficulty::ALL {
+            assert!(setting.enemy_shots(1) >= 1);
+        }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/tempo.rs"]
+mod tempo;

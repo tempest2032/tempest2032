@@ -11,6 +11,7 @@ fn app() -> App {
     app.init_resource::<Sounds>()
         .init_resource::<Assets<Sample>>()
         .init_resource::<Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<Time>()
         .insert_resource(GlobalVolume::new(Volume::Linear(0.6)))
         .add_systems(Startup, setup)

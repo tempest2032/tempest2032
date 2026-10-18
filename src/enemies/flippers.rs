@@ -133,6 +133,7 @@ pub(crate) fn spawn_enemies(
     assets: Res<FlipperAssets>,
     living: Query<(), With<Enemy>>,
     tankers: Query<(), With<tankers::Tanker>>,
+    clock: Res<crate::difficulty::EnemyClock>,
 ) {
     if game.status != Status::Playing || game.remaining == 0 {
         return;
@@ -170,8 +171,7 @@ pub(crate) fn spawn_enemies(
             SpawnKind::Fast => &mut game.super_flipper_timer,
             SpawnKind::Spiral => &mut game.spiral_flipper_timer,
         };
-        if *timer > 0 {
-            *timer -= 1;
+        if !crate::difficulty::due(timer, clock.steps()) {
             continue;
         }
         if occupied >= level.flippers.max_active {
@@ -256,6 +256,7 @@ pub(crate) fn start_spiral_flip(flipper: &mut Flipper, player_lane: usize, web: 
 pub(crate) fn move_enemies(
     mut commands: Commands,
     level: Res<Level>,
+    clock: Res<crate::difficulty::EnemyClock>,
     game: Res<Game>,
     player: Single<&Glider>,
     assets: Res<FlipperAssets>,
@@ -307,7 +308,7 @@ pub(crate) fn move_enemies(
         };
         match flipper.motion {
             Motion::Approach => {
-                flipper.depth -= 2 * LANE_UNIT;
+                flipper.depth -= clock.scaled(2 * LANE_UNIT);
                 if flipper.depth <= level.web.rear() {
                     flipper.depth = level.web.rear() - if spiral.is_some() { 0 } else { speed };
                     flipper.motion = if spiral.is_some() {
@@ -331,7 +332,7 @@ pub(crate) fn move_enemies(
                 }
             }
             Motion::Climb => {
-                flipper.depth = (flipper.depth - speed).max(0);
+                flipper.depth = (flipper.depth - clock.scaled(speed)).max(0);
                 if flipper.depth == 0 {
                     start_flip(&mut flipper, player_lane, &level.web);
                 }
@@ -342,15 +343,15 @@ pub(crate) fn move_enemies(
                 angle,
             } => {
                 if spiral.is_some() {
-                    flipper.depth = (flipper.depth - speed).max(0);
+                    flipper.depth = (flipper.depth - clock.scaled(speed)).max(0);
                 }
-                let angle = angle
-                    + level.flippers.flip_speed
-                        * if super_flipper.is_some() || released.as_ref().is_some_and(|r| r.fast) {
-                            2
-                        } else {
-                            1
-                        };
+                let step = level.flippers.flip_speed
+                    * if super_flipper.is_some() || released.as_ref().is_some_and(|r| r.fast) {
+                        2
+                    } else {
+                        1
+                    };
+                let angle = angle + clock.scaled(i32::from(step)) as u16;
                 flipper.motion = if angle >= level.web.flip_angle(from, flipper.lane, direction) {
                     crate::sound::play(&mut commands, crate::sound::Effect::Tink);
                     Motion::Pause(if released.as_ref().is_some_and(|r| r.burst) {
@@ -366,6 +367,8 @@ pub(crate) fn move_enemies(
                     }
                 };
             }
+            // A tick without enemy time leaves the pause where it is.
+            Motion::Pause(_) if clock.steps() == 0 => {}
             Motion::Pause(0) => {
                 if let Some(released) = &mut released
                     && released.burst
@@ -398,7 +401,9 @@ pub(crate) fn move_enemies(
                     start_flip(&mut flipper, player_lane, &level.web);
                 }
             }
-            Motion::Pause(ticks) => flipper.motion = Motion::Pause(ticks - 1),
+            Motion::Pause(ticks) => {
+                flipper.motion = Motion::Pause(ticks.saturating_sub(clock.steps() as u8))
+            }
         }
         *transform = flipper_transform(&flipper, &level.web);
         if beast.is_some()

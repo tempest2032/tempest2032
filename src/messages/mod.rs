@@ -199,6 +199,7 @@ mod tests {
             let mut app = App::new();
             app.init_resource::<Messages>()
                 .init_resource::<crate::game::Game>()
+                .init_resource::<crate::difficulty::EnemyClock>()
                 .init_resource::<crate::powerups::Upgrades>()
                 .add_systems(Update, advance);
             let mut game = app.world_mut().resource_mut::<crate::game::Game>();
@@ -228,6 +229,7 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<Messages>()
             .init_resource::<crate::game::Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<crate::powerups::Upgrades>()
             .insert_resource(Preview {
                 id: Id::ParticleLaser,
@@ -297,6 +299,7 @@ mod tests {
         let mut app = App::new();
         app.init_resource::<Messages>()
             .init_resource::<crate::game::Game>()
+            .init_resource::<crate::difficulty::EnemyClock>()
             .init_resource::<crate::powerups::Upgrades>()
             .add_systems(Update, advance);
         app.world_mut()

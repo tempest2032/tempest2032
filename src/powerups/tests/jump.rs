@@ -23,6 +23,7 @@ fn a_jump_tap_between_ticks_is_preserved_while_fire_is_held() {
     })
     .init_resource::<ButtonInput<KeyCode>>()
     .init_resource::<Game>()
+    .init_resource::<crate::difficulty::EnemyClock>()
     .init_resource::<Level>()
     .init_resource::<ShotAssets>()
     .add_systems(PreUpdate, queue_jump)
@@ -70,6 +71,7 @@ fn jump_lands_and_resets_its_velocity() {
     app.insert_resource(upgrades)
         .insert_resource(keys)
         .init_resource::<Game>()
+        .init_resource::<crate::difficulty::EnemyClock>()
         .init_resource::<Level>()
         .add_systems(FixedUpdate, update_jump);
     app.world_mut()
