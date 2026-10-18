@@ -690,14 +690,16 @@ Effects, voices, and engine loops use the original driver rates without a
 global pitch multiplier.
 Gameplay-controlled pitch changes still apply to individual sounds.
 
-Spike hits share a dedicated two-voice pool, retaining the original overlap
-limit and higher-slot tie-breaking from `PLAYFX2` (`moomoo.dat:$4370–$446a`).
-Other one-shot effects share a separate sixteen-voice pool so explosions and
-announcements remain audible during busy scenes. This is a deliberate difference
+Spike hits and laser shots each own one dedicated voice. Following `PLAYFX2`'s
+tie-breaking (`moomoo.dat:$4370–$446a`), each new hit or shot replaces the
+previous one instead of stacking copies, so both play at the normal effect level
+during rapid hits or sustained fire. Other one-shot effects share a separate
+sixteen-voice pool so explosions and announcements remain audible during busy
+scenes. This is a deliberate difference
 from the original, where `START_MOD` leaves only two shared effect voices while
 music plays. Each pool takes a free voice or replaces its lowest-priority voice
 when the new priority is equal or higher; lower-priority requests are dropped.
-Spike hits and other effects cannot interrupt each other. Sounds are not queued,
+Spike hits, laser shots, and other effects cannot interrupt each other. Sounds are not queued,
 and playback completion frees a slot immediately.
 
 YES! YES! YES! replaces the exit-engine sounds with the original looping `yes`

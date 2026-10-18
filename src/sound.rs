@@ -8,7 +8,9 @@ use std::time::Duration;
 
 const DSP_RATE: f64 = 26_590_906. / (64. * 28.);
 const MAX_VOICES: usize = 16;
-const MAX_SPIKE_VOICES: usize = 2;
+/// Spike hits and laser shots each own one voice, so a new one cuts the last
+/// instead of stacking copies during rapid hits or sustained fire.
+const DEDICATED: [Effect; 2] = [Effect::Spike, Effect::Laser];
 
 fn playback_rate(pitch: u16) -> u32 {
     // moomoo.dat PLAYFX2 at $4440 scales pitch by 28/43. The DSP adds
@@ -62,15 +64,6 @@ impl Effect {
             | Self::YesTwo
             | Self::OneUp => 101,
             _ => 3,
-        }
-    }
-
-    /// The laser is louder than the plain shot and overlaps itself during sustained fire.
-    /// Lower its gain to keep sustained fire in balance with the normal shot.
-    fn gain(self) -> f32 {
-        match self {
-            Self::Laser => 0.2,
-            _ => 1.0,
         }
     }
 }
@@ -352,7 +345,7 @@ fn update(
     mut engines: Query<(Entity, &Engine, &mut PlaybackSettings, Option<&AudioSink>)>,
 ) {
     let now = time.elapsed_secs_f64();
-    let mut active = [None; MAX_SPIKE_VOICES + MAX_VOICES];
+    let mut active = [None; DEDICATED.len() + MAX_VOICES];
     for (entity, voice, sink) in &voices {
         if voice.generation != sounds.generation
             || sink.map_or(voice.deadline <= now, AudioSink::empty)
@@ -404,17 +397,17 @@ fn update(
         let priority = request.effect.priority();
         let mut slot = None;
         if !request.exit_yes {
-            let spike = request.effect == Effect::Spike;
-            let slots = if spike {
-                0..MAX_SPIKE_VOICES
-            } else {
-                MAX_SPIKE_VOICES..active.len()
-            };
-            // Spike hits retain PLAYFX2's last-tie rule in their own two-voice pool.
+            let dedicated = DEDICATED
+                .iter()
+                .position(|&effect| effect == request.effect);
+            let slots = dedicated.map_or(DEDICATED.len()..active.len(), |index| index..index + 1);
+            // A dedicated voice keeps PLAYFX2's last-tie rule, so each request replaces the last.
             let mut lowest = i32::from(priority);
             for index in slots {
                 let candidate = active[index].map_or(-1, |(_, priority)| i32::from(priority));
-                if candidate < lowest || (candidate == lowest && (spike || slot.is_none())) {
+                if candidate < lowest
+                    || (candidate == lowest && (dedicated.is_some() || slot.is_none()))
+                {
                     lowest = candidate;
                     slot = Some(index);
                 }
@@ -458,9 +451,9 @@ fn update(
         let entity = commands
             .spawn((
                 AudioPlayer(audio),
-                settings.with_speed(speed).with_volume(Volume::Linear(
-                    if priority >= 100 { 0.7 } else { 0.4 } * request.effect.gain(),
-                )),
+                settings
+                    .with_speed(speed)
+                    .with_volume(Volume::Linear(if priority >= 100 { 0.7 } else { 0.4 })),
             ))
             .id();
         if request.exit_yes {

@@ -182,12 +182,6 @@ fn dominant_spike_frequency(pcm: &[f32], rate: u32) -> f64 {
 }
 
 #[test]
-fn the_laser_is_gained_down_to_balance_sustained_fire() {
-    assert!(Effect::Laser.gain() < Effect::Shot.gain());
-    assert_eq!(Effect::Shot.gain(), 1.0);
-}
-
-#[test]
 fn all_effects_decode_as_finite_signed_pcm_at_their_original_periods() {
     for (index, sample) in samples().into_iter().enumerate() {
         if sample.data.is_empty() {
@@ -447,54 +441,42 @@ fn shots_emit_only_when_a_bullet_is_actually_fired() {
 }
 
 #[test]
-fn repeated_spike_hits_replace_equal_priority_voices_instead_of_stacking_or_queuing() {
-    let mut app = app();
-    let hit = Request {
-        effect: Effect::Spike,
-        period: Some(554),
-        exit_yes: false,
-    };
-    app.world_mut().resource_mut::<Sounds>().pending.push(hit);
-    app.update();
-    let mut voices = app.world_mut().query::<(Entity, &Voice)>();
-    let (first, voice) = voices.single(app.world()).unwrap();
-    assert_eq!(voice.slot, 1);
-
-    app.world_mut().resource_mut::<Sounds>().pending.push(hit);
-    app.update();
-    let second = voices
-        .iter(app.world())
-        .find(|(_, voice)| voice.slot == 0)
-        .unwrap()
-        .0;
-    assert_eq!(voices.iter(app.world()).count(), 2);
-
-    app.world_mut().resource_mut::<Sounds>().pending.push(hit);
-    app.update();
-    assert_eq!(voices.iter(app.world()).count(), 2);
-    assert!(app.world().get_entity(first).is_err());
-    assert!(app.world().get_entity(second).is_ok());
-    assert!(app.world().resource::<Sounds>().pending.is_empty());
-
-    app.world_mut()
-        .resource_mut::<Time>()
-        .advance_by(Duration::from_millis(60));
-    app.update();
-    assert_eq!(
-        voices.iter(app.world()).count(),
-        0,
-        "no deferred hit may start later"
-    );
-    app.world_mut()
-        .resource_mut::<Sounds>()
-        .pending
-        .push(Request {
-            effect: Effect::Shot,
-            period: None,
+fn spike_hits_and_laser_shots_each_replace_their_single_voice_instead_of_stacking() {
+    for (effect, period) in [(Effect::Spike, Some(554)), (Effect::Laser, None)] {
+        let mut app = app();
+        let request = Request {
+            effect,
+            period,
             exit_yes: false,
-        });
-    app.update();
-    assert_eq!(voices.single(app.world()).unwrap().1.priority, 1);
+        };
+        app.world_mut()
+            .resource_mut::<Sounds>()
+            .pending
+            .push(request);
+        app.update();
+        let mut voices = app.world_mut().query::<(Entity, &Voice)>();
+        let (first, _) = voices.single(app.world()).unwrap();
+        for _ in 0..3 {
+            app.world_mut()
+                .resource_mut::<Sounds>()
+                .pending
+                .push(request);
+            app.update();
+        }
+        let (last, voice) = voices.single(app.world()).unwrap();
+        assert!(app.world().get_entity(first).is_err(), "{effect:?}");
+        assert_ne!(first, last);
+        assert_eq!(
+            voice.slot,
+            DEDICATED.iter().position(|e| *e == effect).unwrap()
+        );
+        assert!(app.world().resource::<Sounds>().pending.is_empty());
+        // One voice no longer stacks copies, so the effect plays at the normal level.
+        assert_eq!(
+            app.world().get::<PlaybackSettings>(last).unwrap().volume,
+            Volume::Linear(0.4)
+        );
+    }
 }
 
 #[test]
@@ -530,7 +512,7 @@ fn explosions_and_spike_hits_overlap_without_stealing_each_others_voices() {
             });
         app.update();
     }
-    assert_eq!(voices.iter(app.world()).count(), 6);
+    assert_eq!(voices.iter(app.world()).count(), 5);
     assert!(
         others
             .iter()
@@ -538,10 +520,10 @@ fn explosions_and_spike_hits_overlap_without_stealing_each_others_voices() {
     );
     let spikes: Vec<_> = voices
         .iter(app.world())
-        .filter(|(_, voice)| voice.slot < MAX_SPIKE_VOICES)
+        .filter(|(_, voice)| voice.slot == 0)
         .map(|(entity, _)| entity)
         .collect();
-    assert_eq!(spikes.len(), 2);
+    assert_eq!(spikes.len(), 1);
 
     app.world_mut()
         .resource_mut::<Sounds>()
@@ -552,10 +534,7 @@ fn explosions_and_spike_hits_overlap_without_stealing_each_others_voices() {
             exit_yes: false,
         }));
     app.update();
-    assert_eq!(
-        voices.iter(app.world()).count(),
-        MAX_VOICES + MAX_SPIKE_VOICES
-    );
+    assert_eq!(voices.iter(app.world()).count(), MAX_VOICES + 1);
     assert!(
         spikes
             .iter()
