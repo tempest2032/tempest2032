@@ -439,7 +439,10 @@ fn update(
                 }
             })
             .max(1);
-        let speed = if request.effect == Effect::Spike {
+        // Keep the fixed SSI output stage: its aliasing shapes the spike's rising
+        // tone and the audible flipper tink.
+        let aliased = matches!(request.effect, Effect::Spike | Effect::Tink);
+        let speed = if aliased {
             1.
         } else {
             playback_speed(sample.period, period)
@@ -449,8 +452,7 @@ fn update(
                 commands.entity(entity).despawn();
             }
             (catalog.yes.clone(), PlaybackSettings::ONCE)
-        } else if request.effect == Effect::Spike {
-            // Keep the fixed SSI output stage: its aliasing is the spike's audible rising tone.
+        } else if aliased {
             let mut clip = sample.clone();
             clip.dsp_pitch = Some(period);
             (samples.add(clip), PlaybackSettings::DESPAWN)

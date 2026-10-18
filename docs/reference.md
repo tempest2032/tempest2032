@@ -754,6 +754,10 @@ straight to a modern output at its calculated playback rate instead produces
 a roughly 10 kHz tone with the wrong pitch direction. Earlier inverted or
 offset length curves tried to compensate for that missing output stage and
 have been removed. A spectral regression checks the actual decoded waveform.
+Flippers play sample 28, "tink", whenever a flip lands on its lane, following
+`flipto` (`yak.s:11132`). It uses the same output stage: at its nominal 19.3 kHz
+rate, its main peak sits near 8.5 kHz and is barely audible under music and fire.
+The Jaguar aliases it to about 6.4 kHz, which is the audible tick on the rim.
 The upgraded laser fires every three ticks instead of four.
 The converter limits the alternate normal-shot sample
 to its physical boundary and trims the first "sexy yes" sample to its declared

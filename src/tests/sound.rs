@@ -139,7 +139,7 @@ fn spike_hits_use_the_original_sample_with_rising_pitch_as_the_spike_shrinks() {
         assert!(
             (voice.deadline - duration.as_secs_f64() / f64::from(settings.speed)).abs() < 0.001
         );
-        let frequency = dominant_spike_frequency(&pcm, rate) * f64::from(settings.speed);
+        let frequency = dominant_frequency(&pcm, rate) * f64::from(settings.speed);
         assert!(
             (frequency - expected_frequency).abs() < 50.,
             "length {length}: {frequency} Hz"
@@ -150,7 +150,7 @@ fn spike_hits_use_the_original_sample_with_rising_pitch_as_the_spike_shrinks() {
     }
 }
 
-fn dominant_spike_frequency(pcm: &[f32], rate: u32) -> f64 {
+fn dominant_frequency(pcm: &[f32], rate: u32) -> f64 {
     let windowed: Vec<_> = pcm
         .iter()
         .enumerate()
@@ -159,7 +159,7 @@ fn dominant_spike_frequency(pcm: &[f32], rate: u32) -> f64 {
                 * (0.5 - 0.5 * (std::f64::consts::TAU * i as f64 / (pcm.len() - 1) as f64).cos())
         })
         .collect();
-    (1000..=6000)
+    (1000..=7000)
         .step_by(5)
         .map(|frequency| {
             let (real, imaginary) =
@@ -655,4 +655,50 @@ fn reset_stops_old_voices_and_muting_drops_new_requests() {
         app.world_mut().query::<&Voice>().iter(app.world()).count(),
         0
     );
+}
+
+#[test]
+fn completed_flips_tink_through_the_aliasing_effect_output_stage() {
+    use crate::enemies::flippers::{Motion, move_enemies};
+
+    let mut flips = crate::test_support::app();
+    flips
+        .init_resource::<Sounds>()
+        .add_systems(FixedUpdate, move_enemies);
+    let motion = Motion::Flip {
+        from: 3,
+        direction: 1,
+        angle: 0,
+    };
+    crate::test_support::enemy(&mut flips, 4, 0, motion);
+    let requests = (0..60)
+        .find_map(|_| {
+            ticks(&mut flips, 1);
+            let pending = std::mem::take(&mut flips.world_mut().resource_mut::<Sounds>().pending);
+            (!pending.is_empty()).then_some(pending)
+        })
+        .unwrap();
+    assert_eq!(requests.len(), 1);
+    assert_eq!(requests[0].effect, Effect::Tink);
+    let mut playback = app();
+    playback.update();
+    playback.world_mut().resource_mut::<Sounds>().pending = requests;
+    playback.update();
+    let mut voices = playback
+        .world_mut()
+        .query::<(&AudioPlayer<Sample>, &PlaybackSettings)>();
+    let (player, settings) = voices.single(playback.world()).unwrap();
+    assert_eq!(settings.speed, 1.);
+    let clip = playback
+        .world()
+        .resource::<Assets<Sample>>()
+        .get(&player.0)
+        .unwrap();
+    assert_eq!((clip.data.len(), clip.dsp_pitch), (1486, Some(512)));
+    let mut decoder = clip.decoder();
+    let rate = decoder.sample_rate();
+    let pcm: Vec<_> = decoder.by_ref().collect();
+    // Played at its nominal 19.3 kHz rate, the tink would peak near 8.5 kHz instead.
+    let frequency = dominant_frequency(&pcm, rate);
+    assert!((frequency - 6356.).abs() < 50., "{frequency} Hz");
 }
