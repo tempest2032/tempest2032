@@ -156,7 +156,7 @@ While entering initials, F types the letter instead of toggling fullscreen.
 
 ```sh
 cargo run --release -- --fullscreen
-cargo run --release -- --level 17 --difficulty low
+cargo run --release -- --level 17 --difficulty easy
 cargo run --release -- --volume 0.3 --music-volume 0.5
 cargo run --release -- --help
 ```

@@ -292,7 +292,7 @@ mod tests {
         assert_eq!(data.insert(Difficulty::Normal, 10, "BBB".into()), Some(1));
         assert_eq!(data.tables[1][0].initials, "AAA");
         assert_eq!(data.tables[1].len(), LIMIT);
-        assert_eq!(data.rank(Difficulty::High, 1), Some(0));
+        assert_eq!(data.rank(Difficulty::Hard, 1), Some(0));
     }
 
     #[test]
@@ -309,10 +309,10 @@ mod tests {
             assert!(data.save_key(Difficulty::Normal, level, initials));
         }
         assert_eq!(data.keys.len(), 6);
-        assert!(data.save_key(Difficulty::Low, 61, "AAA"));
-        assert!(data.save_key(Difficulty::High, 19, "AAA"));
+        assert!(data.save_key(Difficulty::Easy, 61, "AAA"));
+        assert!(data.save_key(Difficulty::Hard, 19, "AAA"));
         assert!(!data.save_key(Difficulty::Normal, 17, "AAA"));
-        assert!(!data.save_key(Difficulty::High, 17, "AAA"));
+        assert!(!data.save_key(Difficulty::Hard, 17, "AAA"));
         assert_eq!(data.keys[0].levels, [61, 17, 19]);
         assert!(
             data.keys[1..]
@@ -336,8 +336,8 @@ mod tests {
         assert_eq!(data.keys.len(), KEY_LIMIT);
         assert_eq!(data.keys[0].initials, "GGG");
         assert_eq!(data.keys[0].levels, [0, 33, 0]);
-        assert!(data.key_qualifies(Difficulty::High, 17));
-        assert!(data.save_key(Difficulty::High, 17, "HHH"));
+        assert!(data.key_qualifies(Difficulty::Hard, 17));
+        assert!(data.save_key(Difficulty::Hard, 17, "HHH"));
         assert_eq!(data.keys.len(), KEY_LIMIT);
     }
 
@@ -346,10 +346,10 @@ mod tests {
         let old = "version = 1\ndifficulty = 'high'\ninitials = 'XYZ'\ntables = [[], [{initials = 'ABC', score = 12345}], []]";
         let mut data = Data::parse(old).unwrap();
         assert_eq!(data.version, 2);
-        assert_eq!(data.difficulty, Difficulty::High);
+        assert_eq!(data.difficulty, Difficulty::Hard);
         assert_eq!(data.tables[1][0].score, 12345);
         assert!(data.keys.is_empty());
-        data.save_key(Difficulty::Low, 97, "XYZ");
+        data.save_key(Difficulty::Easy, 97, "XYZ");
         data.save_key(Difficulty::Normal, 31, "XYZ");
         let encoded = toml::to_string(&data).unwrap();
         assert_eq!(Data::parse(&encoded).unwrap().keys[0].levels, [97, 31, 0]);
@@ -376,13 +376,13 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let path = directory.path().join("player.toml");
         let mut store = Store::open(Some(path.clone()));
-        store.data.difficulty = Difficulty::High;
-        store.data.insert(Difficulty::Low, 123, "XYZ".into());
-        store.data.save_key(Difficulty::High, 31, "XYZ");
+        store.data.difficulty = Difficulty::Hard;
+        store.data.insert(Difficulty::Easy, 123, "XYZ".into());
+        store.data.save_key(Difficulty::Hard, 31, "XYZ");
         store.save();
         assert!(store.notice.is_empty());
         let loaded = Store::open(Some(path.clone()));
-        assert_eq!(loaded.data.difficulty, Difficulty::High);
+        assert_eq!(loaded.data.difficulty, Difficulty::Hard);
         assert_eq!(loaded.data.initials, "XYZ");
         assert_eq!(loaded.data.tables[0][0].score, 123);
         assert_eq!(loaded.data.keys[0].levels, [0, 0, 31]);

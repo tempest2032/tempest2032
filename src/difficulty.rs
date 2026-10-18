@@ -49,16 +49,20 @@ impl Scale {
 #[serde(rename_all = "lowercase")]
 pub(crate) enum Difficulty {
     /// Faster player bullets, fewer alien shots, slower and rarer enemies.
-    Low,
+    #[serde(alias = "low")]
+    #[value(alias = "low")]
+    Easy,
     #[default]
     /// The original source values, unchanged.
     Normal,
     /// Slower player bullets, more alien shots, faster and denser enemies.
-    High,
+    #[serde(alias = "high")]
+    #[value(alias = "high")]
+    Hard,
 }
 
 impl Difficulty {
-    pub(crate) const ALL: [Self; 3] = [Self::Low, Self::Normal, Self::High];
+    pub(crate) const ALL: [Self; 3] = [Self::Easy, Self::Normal, Self::Hard];
 
     pub(crate) fn index(self) -> usize {
         Self::ALL.iter().position(|value| *value == self).unwrap()
@@ -66,22 +70,22 @@ impl Difficulty {
 
     pub(crate) fn label(self) -> &'static str {
         match self {
-            Self::Low => "LOW",
+            Self::Easy => "EASY",
             Self::Normal => "NORMAL",
-            Self::High => "HIGH",
+            Self::Hard => "HARD",
         }
     }
 
     pub(crate) fn scale(self) -> Scale {
         match self {
             Self::Normal => Scale::IDENTITY,
-            Self::Low => Scale {
+            Self::Easy => Scale {
                 bullet_speed: 1.25,
                 alien_shots: 0.5,
                 climb_speed: 0.85,
                 spawn_interval: 1.3,
             },
-            Self::High => Scale {
+            Self::Hard => Scale {
                 bullet_speed: 0.85,
                 alien_shots: 2.5,
                 climb_speed: 1.2,
@@ -106,8 +110,8 @@ mod tests {
 
     #[test]
     fn low_is_uniformly_more_permissive_than_high() {
-        let low = Difficulty::Low.scale();
-        let high = Difficulty::High.scale();
+        let low = Difficulty::Easy.scale();
+        let high = Difficulty::Hard.scale();
         assert!(low.bullet_speed > high.bullet_speed);
         assert!(low.alien_shots < high.alien_shots);
         assert!(low.climb_speed < high.climb_speed);

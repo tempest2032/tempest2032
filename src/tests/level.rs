@@ -609,8 +609,8 @@ fn low_and_high_scale_enemy_tempo_in_opposite_directions() {
     let source = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/levels/04.toml"));
     let mut low = Level::parse(source, "level4").unwrap();
     let mut high = Level::parse(source, "level4").unwrap();
-    low.scale_difficulty(Difficulty::Low.scale());
-    high.scale_difficulty(Difficulty::High.scale());
+    low.scale_difficulty(Difficulty::Easy.scale());
+    high.scale_difficulty(Difficulty::Hard.scale());
     for (level, name) in [(&low, "low"), (&high, "high")] {
         assert!(
             level.flippers.climb_speed > 0,

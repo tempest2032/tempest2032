@@ -63,7 +63,7 @@ fn welcome_selects_odd_starting_webs_within_fresh_and_key_ranges() {
     app.world_mut()
         .resource_mut::<Store>()
         .data
-        .save_key(Difficulty::Low, 61, "AAA");
+        .save_key(Difficulty::Easy, 61, "AAA");
     assert_eq!(app.world().resource::<FrontEnd>().preview_level(), 1);
     key(&mut app, KeyCode::ArrowDown);
     assert_eq!(app.world().resource::<FrontEnd>().preview_level(), 1);
@@ -510,7 +510,7 @@ fn menus_do_not_compound_difficulty_and_consume_transition_keys() {
     }
     assert_eq!(*app.world().resource::<Difficulty>(), Difficulty::Normal);
     key(&mut app, KeyCode::ArrowLeft);
-    assert_eq!(*app.world().resource::<Difficulty>(), Difficulty::Low);
+    assert_eq!(*app.world().resource::<Difficulty>(), Difficulty::Easy);
     key(&mut app, KeyCode::Escape);
     key(&mut app, KeyCode::Enter);
     assert_eq!(app.world().resource::<FrontEnd>().screen, Screen::Gameplay);
@@ -520,7 +520,7 @@ fn menus_do_not_compound_difficulty_and_consume_transition_keys() {
             .pressed(KeyCode::Enter)
     );
     let mut expected = crate::level::Level::default();
-    expected.scale_difficulty(Difficulty::Low.scale());
+    expected.scale_difficulty(Difficulty::Easy.scale());
     assert!(app.world().resource::<Levels>().0[0] == expected);
     app.world_mut().resource_mut::<FrontEnd>().screen = Screen::Welcome;
     key(&mut app, KeyCode::Enter);

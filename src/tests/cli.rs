@@ -392,10 +392,13 @@ fn original_starfield_variants_can_be_selected_with_levels_and_capture() {
 fn difficulty_defaults_to_saved_choice_and_accepts_the_three_settings() {
     use crate::difficulty::Difficulty;
     assert_eq!(Cli::parse_from(["tempest2032"]).difficulty, None);
+    // The former low/high names remain accepted for existing scripts.
     for (name, expected) in [
-        ("low", Difficulty::Low),
+        ("easy", Difficulty::Easy),
         ("normal", Difficulty::Normal),
-        ("high", Difficulty::High),
+        ("hard", Difficulty::Hard),
+        ("low", Difficulty::Easy),
+        ("high", Difficulty::Hard),
     ] {
         assert_eq!(
             Cli::try_parse_from(["tempest2032", "--difficulty", name])

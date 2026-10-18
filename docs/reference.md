@@ -1316,7 +1316,7 @@ fill and its static depth shading.
 
 ### Difficulty
 
-`--difficulty low|normal|high` scales enemy tempo and player pressure at
+`--difficulty easy|normal|hard` (the former `low` and `high` remain accepted) scales enemy tempo and player pressure at
 runtime. The welcome screen's configuration menu selects the same settings.
 The parsed, unscaled catalog is retained, and each new run builds its active
 catalog from those originals. Switching difficulty never compounds scaling or
@@ -1326,12 +1326,12 @@ overrides it for that launch without changing the saved choice.
 
 | Setting | Player bullet speed | Alien shot budget | Enemy climb speed | Spawn interval |
 | --- | --- | --- | --- | --- |
-| `low` | ×1.25 | ×0.5 | ×0.85 | ×1.3 |
+| `easy` | ×1.25 | ×0.5 | ×0.85 | ×1.3 |
 | `normal` | ×1 | ×1 | ×1 | ×1 |
-| `high` | ×0.85 | ×2.5 | ×1.2 | ×0.8 |
+| `hard` | ×0.85 | ×2.5 | ×1.2 | ×0.8 |
 
 ```sh
-cargo run --release -- --level 3 --difficulty high
+cargo run --release -- --level 3 --difficulty hard
 ```
 
 The alien shot budget is `level.enemy_shots`, which the parser keeps within
@@ -1361,7 +1361,7 @@ It is not a point on the `--difficulty` scale. The two overlap on player bullet
 speed but disagree on magnitude, and Beastly leaves enemy density alone
 entirely:
 
-| Knob | Beastly | `--difficulty high` |
+| Knob | Beastly | `--difficulty hard` |
 | --- | --- | --- |
 | Player bullet speed | ×0.50 (`$38000` halved) | ×0.85 |
 | Alien shot budget | absolute 7, not a multiplier | ×2.5 |
