@@ -95,7 +95,7 @@ On Debian or Ubuntu, install the build dependencies first:
 ```sh
 sudo apt install build-essential pkg-config libasound2-dev libudev-dev \
   libx11-dev libxi-dev libxrandr-dev libxcursor-dev \
-  libxkbcommon-dev libwayland-dev
+  libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev
 ```
 
 ### Add to Steam

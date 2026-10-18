@@ -69,7 +69,7 @@ jobs:
           sudo apt-get install --no-install-recommends -y \
             build-essential pkg-config libasound2-dev libudev-dev \
             libx11-dev libxi-dev libxrandr-dev libxcursor-dev \
-            libxkbcommon-dev libwayland-dev xvfb xauth libvulkan1 mesa-vulkan-drivers
+            libxkbcommon-dev libxkbcommon-x11-0 libwayland-dev xvfb xauth libvulkan1 mesa-vulkan-drivers
       - name: Install Rust
         run: rustup toolchain install stable --profile minimal --target "$BUILD_TARGET"
       - name: Cache Rust dependencies
