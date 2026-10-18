@@ -495,6 +495,15 @@ dispatches. It builds optimized packages on native runners for Windows x86_64,
 macOS arm64, and Linux x86_64/arm64. Each job uploads its packages as an Actions
 artifact with a three-day retention period. It is also a reusable workflow called
 by the release workflow for tag builds.
+Package jobs launch the Windows installation, signed macOS app bundle, staged
+Linux executable, and installed Flatpak outside the source tree. Each must render
+Welcome and level-one screenshots and exit successfully within 120 seconds per
+scene. Linux uses Xvfb and Mesa's software Vulkan driver. The `smoke-*` Actions
+artifacts retain screenshots and process logs for three days, including failed
+launch logs. These checks exercise startup and rendering, but do not establish
+clean-Windows compatibility, audible output, or physical GPU/controller support.
+Native checks are enabled with `tools/package.py --smoke-test`; the shared runner
+can also be called as `python3 tools/smoke.py --output target/smoke -- /absolute/path/to/tempest2032`.
 Windows shortcuts and the installer's Play action pass `--fullscreen`. The macOS
 app and Flatpak use a small launcher that passes `--fullscreen` and forwards any
 additional arguments to the game executable.

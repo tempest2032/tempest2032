@@ -108,6 +108,22 @@ class Packages(unittest.TestCase):
         with self.assertRaises(ValueError):
             package.flatpak(self.output, "main")
 
+    def test_windows_failed_launch_still_uninstalls_the_test_installation(self):
+        def command(args, **kwargs):
+            if "/VERYSILENT" in args and not args[0].endswith("unins000.exe"):
+                installed = Path(next(arg[5:] for arg in args if arg.startswith("/DIR=")))
+                installed.mkdir()
+                (installed / "tempest2032.exe").write_bytes(self.binary.read_bytes())
+
+        with patch("package.shutil.which", return_value="ISCC"), \
+                patch("package.subprocess.run", side_effect=command) as run, \
+                patch("package.smoke.run", side_effect=RuntimeError("startup failed")) as launch:
+            with self.assertRaisesRegex(RuntimeError, "startup failed"):
+                package.native("windows", "x86_64-pc-windows-msvc", self.binary,
+                               self.output, smoke_test=True)
+            self.assertTrue(Path(launch.call_args.args[0][0]).name == "tempest2032.exe")
+            self.assertTrue(run.call_args_list[-1].args[0][0].endswith("unins000.exe"))
+
 
 if __name__ == "__main__":
     unittest.main()

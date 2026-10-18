@@ -13,6 +13,8 @@ import tarfile
 import tempfile
 import tomllib
 
+import smoke
+
 ROOT = Path(__file__).resolve().parents[1]
 APP_ID = "io.github.tempest2032.Tempest2032"
 VERSION = tomllib.loads((ROOT / "Cargo.toml").read_text())["package"]["version"]
@@ -24,7 +26,7 @@ def copy_binary(binary, destination):
     destination.chmod(0o755)
 
 
-def native(platform, target, binary, output):
+def native(platform, target, binary, output, smoke_test=False):
     binary = binary.resolve(strict=True)
     with tempfile.TemporaryDirectory(dir=output) as temporary:
         stage = Path(temporary)
@@ -43,11 +45,15 @@ def native(platform, target, binary, output):
                 str(installer), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-",
                 f"/DIR={installed}", "/GROUP=Tempest 2032 package check", "/TASKS=",
             ], check=True, timeout=120)
-            if (installed / "tempest2032.exe").read_bytes() != binary.read_bytes():
-                raise RuntimeError("Installer did not preserve the standalone executable")
-            subprocess.run([
-                str(installed / "unins000.exe"), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
-            ], check=True, timeout=120)
+            try:
+                if (installed / "tempest2032.exe").read_bytes() != binary.read_bytes():
+                    raise RuntimeError("Installer did not preserve the standalone executable")
+                if smoke_test:
+                    smoke.run([str(installed / "tempest2032.exe")], output / "smoke")
+            finally:
+                subprocess.run([
+                    str(installed / "unins000.exe"), "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART",
+                ], check=True, timeout=120)
         elif platform == "macos":
             contents = stage / "Tempest 2032.app" / "Contents"
             copy_binary(binary, contents / "MacOS/tempest2032")
@@ -77,6 +83,8 @@ def native(platform, target, binary, output):
             subprocess.run(["codesign", "--force", "--sign", "-", str(contents / "MacOS/tempest2032")], check=True)
             subprocess.run(["codesign", "--force", "--sign", "-", str(contents.parent)], check=True)
             subprocess.run(["codesign", "--verify", "--strict", str(contents.parent)], check=True)
+            if smoke_test:
+                smoke.run([str(contents / "MacOS/tempest2032-fullscreen")], output / "smoke")
             (stage / "Applications").symlink_to("/Applications")
             subprocess.run([
                 "hdiutil", "create", "-volname", "Tempest 2032", "-srcfolder", str(stage),
@@ -104,6 +112,8 @@ def native(platform, target, binary, output):
             )
             with tarfile.open(output / f"{name}.tar.gz", "w:gz") as archive:
                 archive.add(folder, arcname=name)
+            if smoke_test:
+                smoke.run([str(folder / "tempest2032")], output / "smoke")
 
 
 def flatpak(output, revision):
@@ -162,6 +172,7 @@ def main():
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--revision")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--smoke-test", action="store_true", help="Launch native packages and verify screenshots")
     args = parser.parse_args()
     output = args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -172,7 +183,7 @@ def main():
     else:
         if not args.target or not args.binary:
             parser.error("Native packaging requires --target and --binary")
-        native(args.platform, args.target, args.binary, output)
+        native(args.platform, args.target, args.binary, output, smoke_test=args.smoke_test)
 
 
 if __name__ == "__main__":
