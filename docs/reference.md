@@ -686,6 +686,12 @@ Use `--volume 0.3` for quieter audio or `--volume 0` for silence. The default
 is `0.6`; values must be between zero and one. The sound pack is embedded in the
 executable, so playback needs no original source tree or ROM at runtime.
 
+Press M to mute or unmute music and effects, including in menus and while
+paused. Muting keeps playback running silently and preserves volume settings.
+A crossed-out speaker in the bottom-right corner indicates that audio is muted.
+During initials entry, M remains a letter input. The mute state lasts until
+the game closes.
+
 Effects, voices, and engine loops use the original driver rates without a
 global pitch multiplier.
 Gameplay-controlled pitch changes still apply to individual sounds.

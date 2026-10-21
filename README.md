@@ -137,6 +137,7 @@ feedback where the browser supports it.
 | Superzapper | C | X, right trigger, or right bumper |
 | Pause/resume | P or Pause | Start |
 | Toggle fullscreen | F | Keyboard only |
+| Mute/unmute | M | Keyboard only |
 | Show/hide FPS | F3 | — |
 | Restart | Restart in the pause menu | Restart in the pause menu |
 | Return to Welcome | Esc during gameplay or Exit in the pause menu | Exit in the pause menu |

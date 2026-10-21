@@ -12,6 +12,54 @@ const MAX_VOICES: usize = 16;
 /// instead of stacking copies during rapid hits or sustained fire.
 const DEDICATED: [Effect; 2] = [Effect::Spike, Effect::Laser];
 
+#[derive(Resource, Default)]
+pub(crate) struct Muted(pub(crate) bool);
+
+fn toggle_mute(
+    mut input: MessageReader<bevy::input::keyboard::KeyboardInput>,
+    keys: Res<ButtonInput<KeyCode>>,
+    front: Option<Res<crate::menu::FrontEnd>>,
+    window: Single<Entity, With<bevy::window::PrimaryWindow>>,
+    mut muted: ResMut<Muted>,
+) {
+    for event in input.read() {
+        if event.key_code == KeyCode::KeyM
+            && event.state == bevy::input::ButtonState::Pressed
+            && !event.repeat
+            && event.window == *window
+            && !front
+                .as_ref()
+                .is_some_and(|front| front.screen == crate::menu::Screen::Initials)
+            && !keys.any_pressed([
+                KeyCode::ControlLeft,
+                KeyCode::ControlRight,
+                KeyCode::AltLeft,
+                KeyCode::AltRight,
+                KeyCode::SuperLeft,
+                KeyCode::SuperRight,
+            ])
+        {
+            muted.0 = !muted.0;
+        }
+    }
+}
+
+fn apply_mute(
+    muted: Res<Muted>,
+    mut audio: Query<(&mut PlaybackSettings, Option<&mut AudioSink>)>,
+) {
+    for (mut settings, sink) in &mut audio {
+        settings.muted = muted.0;
+        if let Some(mut sink) = sink {
+            if muted.0 {
+                sink.mute();
+            } else {
+                sink.unmute();
+            }
+        }
+    }
+}
+
 fn playback_rate(pitch: u16) -> u32 {
     // moomoo.dat PLAYFX2 at $4440 scales pitch by 28/43. The DSP adds
     // that increment to an 8:8 sample position per SSI tick, with SCLK = 27.
@@ -259,6 +307,19 @@ struct PitchRise {
 pub(crate) fn add_systems(app: &mut App) {
     app.add_audio_source::<Sample>()
         .init_resource::<Sounds>()
+        .init_resource::<Muted>()
+        .add_systems(
+            PreUpdate,
+            toggle_mute
+                .after(bevy::input::InputSystems)
+                .before(crate::menu::input)
+                .before(crate::pause::input),
+        )
+        // Set pending players' mute state before Bevy creates their audio sinks.
+        .add_systems(
+            PostUpdate,
+            apply_mute.before(bevy::transform::TransformSystems::Propagate),
+        )
         .add_systems(Startup, setup)
         .add_systems(
             Update,

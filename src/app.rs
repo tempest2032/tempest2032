@@ -123,7 +123,8 @@ pub(crate) fn run(args: cli::Cli) {
         );
     app.insert_resource(FpsDisplay(args.fps))
         .init_resource::<FpsMeter>()
-        .add_systems(Startup, spawn_fps_label)
+        .add_systems(Startup, (spawn_fps_label, crate::hud::spawn_mute_indicator))
+        .add_systems(Update, crate::hud::update_mute_indicator)
         .add_systems(
             PreUpdate,
             toggle_fps

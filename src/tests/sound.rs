@@ -6,6 +6,79 @@ use crate::{
     test_support::{firing_app, ticks},
 };
 
+#[cfg(not(target_arch = "wasm32"))]
+#[test]
+fn mute_preserves_playback_and_volume_changes_and_covers_new_players() {
+    let mut app = App::new();
+    app.init_resource::<Muted>()
+        .add_systems(PostUpdate, apply_mute);
+    let (sink, _output) = rodio::Sink::new_idle();
+    let mut sink = AudioSink::new(sink);
+    sink.set_volume(Volume::Linear(0.3));
+    sink.pause();
+    let entity = app.world_mut().spawn((PlaybackSettings::LOOP, sink)).id();
+    app.world_mut().resource_mut::<Muted>().0 = true;
+    app.update();
+    let mut sink = app.world_mut().get_mut::<AudioSink>(entity).unwrap();
+    assert!(sink.is_muted());
+    assert!(sink.is_paused());
+    assert_eq!(sink.volume(), Volume::Linear(0.3));
+    sink.set_volume(Volume::Linear(0.15));
+    let pending = app.world_mut().spawn(PlaybackSettings::ONCE).id();
+    app.update();
+    assert!(app.world().get::<PlaybackSettings>(pending).unwrap().muted);
+    app.world_mut().resource_mut::<Muted>().0 = false;
+    app.update();
+    let sink = app.world().get::<AudioSink>(entity).unwrap();
+    assert!(!sink.is_muted());
+    assert!(sink.is_paused());
+    assert_eq!(sink.volume(), Volume::Linear(0.15));
+    assert!(!app.world().get::<PlaybackSettings>(pending).unwrap().muted);
+}
+
+#[test]
+fn mute_shortcut_ignores_repeat_modifiers_and_initials() {
+    use crate::menu::{FrontEnd, Screen};
+    use bevy::input::{
+        ButtonState,
+        keyboard::{Key, KeyboardInput},
+    };
+
+    let mut app = App::new();
+    app.init_resource::<Muted>()
+        .init_resource::<ButtonInput<KeyCode>>()
+        .init_resource::<Time<Virtual>>()
+        .add_message::<KeyboardInput>()
+        .insert_resource(FrontEnd::new(Screen::Welcome, false, Vec::new()))
+        .add_systems(PreUpdate, toggle_mute);
+    let window = app.world_mut().spawn(bevy::window::PrimaryWindow).id();
+    for (screen, repeat, control, expected) in [
+        (Screen::Welcome, false, false, true),
+        (Screen::Gameplay, true, false, true),
+        (Screen::Initials, false, false, true),
+        (Screen::Configuration, false, true, true),
+        (Screen::Gameplay, false, false, false),
+    ] {
+        app.world_mut().resource_mut::<FrontEnd>().screen = screen;
+        app.world_mut().resource_mut::<Time<Virtual>>().pause();
+        let mut keys = app.world_mut().resource_mut::<ButtonInput<KeyCode>>();
+        keys.reset_all();
+        if control {
+            keys.press(KeyCode::ControlLeft);
+        }
+        app.world_mut().write_message(KeyboardInput {
+            key_code: KeyCode::KeyM,
+            logical_key: Key::Character("m".into()),
+            state: ButtonState::Pressed,
+            text: Some("m".into()),
+            repeat,
+            window,
+        });
+        app.update();
+        assert_eq!(app.world().resource::<Muted>().0, expected);
+    }
+}
+
 fn app() -> App {
     let mut app = App::new();
     app.init_resource::<Sounds>()

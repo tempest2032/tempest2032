@@ -62,6 +62,99 @@ pub(crate) fn setup(
 #[derive(Component)]
 pub(crate) struct FpsLabel;
 
+#[derive(Component)]
+pub(crate) struct MuteIndicator;
+
+pub(crate) fn spawn_mute_indicator(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    use bevy::{
+        asset::RenderAssetUsages,
+        render::render_resource::{Extent3d, TextureDimension, TextureFormat},
+    };
+
+    let pixels = (0..64 * 64)
+        .flat_map(|i| {
+            let x = (i % 64) as f32 / 2. + 0.25;
+            let y = (i / 64) as f32 / 2. + 0.25;
+            let point = Vec2::new(x, y);
+            let segment = |a: Vec2, b: Vec2| {
+                point.distance(
+                    a + (b - a) * ((point - a).dot(b - a) / a.distance_squared(b)).clamp(0., 1.),
+                )
+            };
+            let slash = segment(Vec2::new(6., 27.), Vec2::new(28., 5.));
+            let distance = if slash < 2.8 {
+                slash
+            } else {
+                let speaker = [
+                    Vec2::new(4., 12.),
+                    Vec2::new(10., 12.),
+                    Vec2::new(19., 5.),
+                    Vec2::new(19., 27.),
+                    Vec2::new(10., 20.),
+                    Vec2::new(4., 20.),
+                    Vec2::new(4., 12.),
+                ]
+                .windows(2)
+                .map(|edge| segment(edge[0], edge[1]))
+                .fold(f32::MAX, f32::min);
+                let wave = point - Vec2::new(14., 16.);
+                if wave.x > 0. && wave.y.abs() < wave.x * 0.7 {
+                    speaker
+                        .min((wave.length() - 10.).abs())
+                        .min((wave.length() - 15.).abs())
+                } else {
+                    speaker
+                }
+            };
+            [
+                215,
+                215,
+                215,
+                (((1.2 - distance) * 2. + 0.5).clamp(0., 1.) * 255.) as u8,
+            ]
+        })
+        .collect();
+    let mut image = Image::new(
+        Extent3d {
+            width: 64,
+            height: 64,
+            depth_or_array_layers: 1,
+        },
+        TextureDimension::D2,
+        pixels,
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    );
+    image.sampler = bevy::image::ImageSampler::linear();
+    commands.spawn((
+        MuteIndicator,
+        Visibility::Hidden,
+        GlobalZIndex(40),
+        ImageNode::new(images.add(image)),
+        Node {
+            position_type: PositionType::Absolute,
+            bottom: px(20),
+            right: px(20),
+            width: px(32),
+            height: px(32),
+            ..default()
+        },
+    ));
+}
+
+pub(crate) fn update_mute_indicator(
+    muted: Res<crate::sound::Muted>,
+    mut indicator: Single<&mut Visibility, With<MuteIndicator>>,
+) {
+    if muted.is_changed() {
+        **indicator = if muted.0 {
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        };
+    }
+}
+
 #[derive(Resource)]
 pub(crate) struct FpsDisplay(pub(crate) bool);
 
